@@ -1440,7 +1440,7 @@ function startTalkTimeTracking() {
 
     // STRICT MODE: Local Kill Switch
     if (currentDisplay <= 0 && sessionActive) {
-      console.warn("⛔ Timer hit 0. Cutting connection immediately.");
+      console.warn(`⛔ Timer hit 0 (currentDisplay: ${currentDisplay}). Cutting connection immediately.`);
       endSession(); // Cut mic
       showPaymentModal('during'); // Demand payment
       return;
@@ -1451,6 +1451,7 @@ function startTalkTimeTracking() {
       updateTalktimeDisplay(currentDisplay);
       // [FIX] Save the new local value to storage so next tick is consistent
       sessionStorage.setItem('userTalktime', currentDisplay.toString());
+      if (currentDisplay % 10 === 0) console.log(`⏱️ Time remaining: ${currentDisplay}s`);
     }
   }, 1000);
 

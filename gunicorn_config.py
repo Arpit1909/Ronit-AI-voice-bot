@@ -33,7 +33,9 @@ proc_name = "ronit-ai-coach"
 reload = False
 
 # Environment Variables (can be overridden by system env)
+# CRITICAL: JWT_SECRET_KEY must be set here for session persistence across restarts!
 raw_env = [
     "FLASK_ENV=production",
-    "PYTHONUNBUFFERED=1"
+    "PYTHONUNBUFFERED=1",
+    "JWT_SECRET_KEY=5f57340b7fab5f1f172c336ac35264defcaddc3a204800030fee17b445895ab9"
 ]
