@@ -1,31 +1,28 @@
 import { Conversation } from "https://cdn.jsdelivr.net/npm/@11labs/client/+esm";
 
-// --- Authentication Helper ---
-/**
- * Authenticated fetch helper that automatically injects JWT token
- * and handles 401 redirects to login page.
- */
+// Authenticated fetch helper that automatically injects JWT token
+// and handles 401 redirects to login page.
 async function authenticatedFetch(url, options = {}) {
   const token = sessionStorage.getItem('authToken');
-  
+
   if (!token) {
     console.warn('No auth token found, redirecting to login');
     window.location.href = '/login.html';
     return Promise.reject(new Error('No authentication token'));
   }
-  
+
   // Merge headers
   const headers = {
     'Content-Type': 'application/json',
     'Authorization': `Bearer ${token}`,
     ...options.headers
   };
-  
+
   const response = await fetch(url, {
     ...options,
     headers
   });
-  
+
   // Handle 401 Unauthorized - redirect to login
   if (response.status === 401) {
     console.warn('Authentication failed, redirecting to login');
@@ -33,11 +30,11 @@ async function authenticatedFetch(url, options = {}) {
     window.location.href = '/login.html';
     return Promise.reject(new Error('Authentication failed'));
   }
-  
+
   return response;
 }
 
-// --- State ---
+
 let conversation;
 let userTranscript = "";
 let sessionActive = false;
@@ -58,7 +55,7 @@ let userMediaStream = null; // Store the microphone stream for muting
 const HEARTBEAT_RATE = 5000; // Sync with server every 5 seconds
 // Text status controller - no animation intervals needed
 
-// --- Production: Connection Health & Recovery ---
+
 let connectionHealthCheck = null;
 let disconnectRetryCount = 0;
 let disconnectRetryTimeout = null;
@@ -67,23 +64,22 @@ const RETRY_DELAY = 2000; // 2 seconds
 let lastConnectionTime = null;
 let isReconnecting = false;
 
-// --- Sync State (Smart Latency Method) ---
-let speakTimeout = null;    // Timer to start speaking visual
-let silenceTimeout = null;  // Timer to stop speaking visual
-const AUDIO_LATENCY_MS = 100; // Reduced to 100ms for snappier visuals
-const SPEAKING_RATE_MS = 50;  // Approx milliseconds per character (speed of voice)
 
-// --- Elements ---
+let speakTimeout = null;
+let silenceTimeout = null;
+const AUDIO_LATENCY_MS = 100;
+const SPEAKING_RATE_MS = 50;
+
 let screens, footer, loadingBar, callStatus, callRing, timerDisplay, micBtn, talkTimeValue, buyTalkTimeBtn, loadingTalkTimeValue;
 let talktimeValue, loadingTalktimeValue, callTalktimeValue, btnBuyTalktime;
 
-  // Check microphone permission status on load
+// Check microphone permission status on load
 async function checkMicrophonePermission() {
   try {
     if (navigator.permissions && navigator.permissions.query) {
       const result = await navigator.permissions.query({ name: 'microphone' });
       console.log('🎤 Microphone permission status:', result.state);
-      
+
       result.onchange = () => {
         console.log('🎤 Microphone permission changed to:', result.state);
         if (result.state === 'granted') {
@@ -92,7 +88,7 @@ async function checkMicrophonePermission() {
           console.warn('⚠️ Microphone permission denied');
         }
       };
-      
+
       return result.state;
     }
   } catch (err) {
@@ -101,7 +97,7 @@ async function checkMicrophonePermission() {
   return 'unknown';
 }
 
-// Theme Management
+
 function initTheme() {
   const savedTheme = localStorage.getItem('theme') || 'light';
   const html = document.documentElement;
@@ -113,7 +109,7 @@ function toggleTheme() {
   const html = document.documentElement;
   const currentTheme = html.getAttribute('data-theme') || 'light';
   const newTheme = currentTheme === 'light' ? 'dark' : 'light';
-  
+
   html.setAttribute('data-theme', newTheme);
   localStorage.setItem('theme', newTheme);
   updateThemeIcon(newTheme);
@@ -133,26 +129,26 @@ function updateThemeIcon(theme) {
 // Wait for DOM to be ready
 document.addEventListener('DOMContentLoaded', () => {
   console.log('🚀 App initializing...');
-  
+
   // Initialize theme
   initTheme();
-  
+
   // Theme toggle button
   const themeToggle = document.getElementById('themeToggle');
   if (themeToggle) {
     themeToggle.addEventListener('click', toggleTheme);
   }
-  
+
   // Also check for sidebar theme toggle
   const themeToggleSidebar = document.querySelector('.theme-toggle-sidebar');
   if (themeToggleSidebar) {
     themeToggleSidebar.addEventListener('click', toggleTheme);
   }
-  
+
   // Side panel toggle button
   const sidePanelToggle = document.getElementById('sidePanelToggle');
   const sidePanel = document.getElementById('sidePanel');
-  
+
   function updateToggleButtonVisibility() {
     if (sidePanel && sidePanelToggle) {
       const isClosed = sidePanel.classList.contains('closed');
@@ -160,26 +156,26 @@ document.addEventListener('DOMContentLoaded', () => {
       sidePanelToggle.style.display = isClosed ? 'flex' : 'none';
     }
   }
-  
+
   if (sidePanelToggle && sidePanel) {
     // Check if panel state is saved in localStorage
     const savedState = localStorage.getItem('sidePanelOpen');
     const isOpen = savedState === null ? false : savedState === 'true'; // Default to closed
-    
+
     if (!isOpen) {
       sidePanel.classList.add('closed');
     }
-    
+
     // Update toggle button visibility on load
     updateToggleButtonVisibility();
-    
+
     sidePanelToggle.addEventListener('click', () => {
       sidePanel.classList.toggle('closed');
       const isNowOpen = !sidePanel.classList.contains('closed');
       localStorage.setItem('sidePanelOpen', isNowOpen.toString());
       updateToggleButtonVisibility();
     });
-    
+
     // Close button inside panel
     const sidePanelClose = document.getElementById('sidePanelClose');
     if (sidePanelClose) {
@@ -190,7 +186,7 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }
   }
-  
+
   // Check microphone permission status and update UI
   checkMicrophonePermission().then(status => {
     const permissionNotice = document.querySelector('.permission-notice');
@@ -211,7 +207,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
   });
-  
+
   // Initialize elements
   screens = {
     ronitStart: document.getElementById('screen-ronit-start'),
@@ -231,7 +227,7 @@ document.addEventListener('DOMContentLoaded', () => {
   loadingTalktimeValue = document.getElementById('loadingTalktimeValue');
   callTalktimeValue = document.getElementById('callTalktimeValue');
   btnBuyTalktime = document.getElementById('btn-buy-talktime');
-  
+
   // Ensure talk time displays are visible
   const talkTimeDisplay = document.getElementById('talkTimeDisplay');
   const loadingTalkTimeDisplay = document.getElementById('loadingTalkTimeDisplay');
@@ -243,13 +239,13 @@ document.addEventListener('DOMContentLoaded', () => {
     loadingTalkTimeDisplay.style.display = 'block';
     loadingTalkTimeDisplay.style.visibility = 'visible';
   }
-  
+
   // Initialize and display talktime
   initializeTalktime();
-  
+
   // Start periodic talktime refresh (every 30 seconds) to sync with admin updates
   startTalktimeRefresh();
-  
+
   // Force immediate refresh on page load to sync with server
   setTimeout(() => {
     authenticatedFetch('/api/user/talktime')
@@ -264,10 +260,10 @@ document.addEventListener('DOMContentLoaded', () => {
       })
       .catch(err => console.warn('⚠️ Initial sync failed:', err));
   }, 1000); // Wait 1 second after page load
-  
+
   // Start periodic online status ping (every 60 seconds) to keep user marked as online
   startOnlinePing();
-  
+
   // Initialize side panel talktime display (will be updated by initializeTalktime)
   // Note: sidePanelTalktimeValue is updated in updateTalktimeDisplay function
   const sidePanelTalktimeValueEl = document.getElementById('sidePanelTalktimeValue');
@@ -326,9 +322,6 @@ document.addEventListener('DOMContentLoaded', () => {
     console.warn('⚠️ Logout button not found');
   }
 
-  // --- Navigation Flow ---
-
-  // Ronit Start -> Loading -> Call
   const btnStartLoading = document.getElementById('btn-start-loading');
   if (btnStartLoading) {
     console.log('✅ Start call button found and initialized');
@@ -343,7 +336,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (emailInput) emailInput.focus();
         return;
       }
-      
+
       if (!emailRegex.test(email)) {
         alert("Please enter a valid email address (e.g., yourname@example.com).");
         const emailInput = document.getElementById('userEmail');
@@ -353,9 +346,21 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         return;
       }
-      
+
       // Get name from email or sessionStorage
       const name = sessionStorage.getItem('userName') || email.split('@')[0] || 'User';
+
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      if (AudioContext) {
+        if (!window.globalAudioContext) {
+          window.globalAudioContext = new AudioContext();
+        }
+        window.globalAudioContext.resume().then(() => {
+          console.log('🔊 AudioContext resumed via user gesture');
+        }).catch(err => {
+          console.warn('⚠️ AudioContext resume failed:', err);
+        });
+      }
 
       // Check if user has talktime
       const talktime = parseInt(sessionStorage.getItem('userTalktime') || '0', 10);
@@ -380,30 +385,30 @@ document.addEventListener('DOMContentLoaded', () => {
       if (screens.ronitStart) screens.ronitStart.classList.add('hidden');
       if (screens.loading) screens.loading.classList.remove('hidden');
       if (footer) footer.style.display = 'none'; // Hide footer for call view
-      
+
       // Initialize and display talk time on loading screen
       timeRemaining = 180; // Reset to 3 minutes
       if (loadingTalkTimeValue) {
         loadingTalkTimeValue.textContent = '03:00';
       }
-      
+
       // Update talktime display on loading screen
       if (loadingTalktimeValue) {
         const talktime = parseInt(sessionStorage.getItem('userTalktime') || '0', 10);
         loadingTalktimeValue.textContent = talktime.toLocaleString();
       }
-      
+
       // Save user data to sessionStorage
       sessionStorage.setItem('userEmail', email);
       sessionStorage.setItem('userName', name); // Use email prefix as name
 
       // [FIX] Start immediately to preserve User Gesture for Audio/Mic
       console.log('📞 Starting call process...');
-      
+
       // Fill loading bar visually (optional)
       if (loadingBar) {
-          loadingBar.style.transition = 'width 0.5s ease';
-          loadingBar.style.width = '100%'; 
+        loadingBar.style.transition = 'width 0.5s ease';
+        loadingBar.style.width = '100%';
       }
 
       // CALL IMMEDIATELY - Do not wait for a timer!
@@ -427,12 +432,12 @@ document.addEventListener('DOMContentLoaded', () => {
   if (buyTalkTimeBtn) {
     buyTalkTimeBtn.addEventListener('click', handleBuyTalkTime);
   }
-  
+
   // Buy Talktime Button (main card - if exists)
   if (btnBuyTalktime) {
     btnBuyTalktime.addEventListener('click', handleBuyTalktime);
   }
-  
+
   // Side Panel Buy Talktime Button
   const sidePanelBuyBtn = document.getElementById('sidePanelBuyTalktime');
   if (sidePanelBuyBtn) {
@@ -441,10 +446,10 @@ document.addEventListener('DOMContentLoaded', () => {
   } else {
     console.warn('⚠️ Side panel buy talktime button not found');
   }
-  
+
   // Initialize talktime on page load
   initializeTalktime();
-  
+
   // Re-check welcome bonus when email changes
   const emailInput = document.getElementById('userEmail');
   if (emailInput) {
@@ -460,7 +465,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }, 1000); // Wait 1 second after user stops typing
     });
   }
-  
+
   // Initialize payment modal buttons
   initializePaymentModal();
 });
@@ -488,9 +493,9 @@ function hidePaymentModal() {
 
 function pauseSessionForPayment() {
   if (!sessionActive || isSessionPaused) return;
-  
+
   isSessionPaused = true;
-  
+
   // Pause the conversation
   if (conversation) {
     try {
@@ -503,7 +508,7 @@ function pauseSessionForPayment() {
       console.error('Error pausing conversation:', e);
     }
   }
-  
+
   // Show payment modal
   showPaymentModal('during');
   updateStatus('Session Paused - Buy Talktime to Continue', 'default');
@@ -511,9 +516,9 @@ function pauseSessionForPayment() {
 
 function resumeSession() {
   if (!isSessionPaused) return;
-  
+
   isSessionPaused = false;
-  
+
   // Resume the conversation
   if (conversation) {
     try {
@@ -526,17 +531,17 @@ function resumeSession() {
       console.error('Error resuming conversation:', e);
     }
   }
-  
+
   // [CRITICAL FIX] REMOVED the code that hid the status text
   // The text should remain visible indicating "Listening..."
-  toggleVoiceVisuals('listening'); 
+  toggleVoiceVisuals('listening');
 }
 
 function initializePaymentModal() {
   const paymentCancelBtn = document.getElementById('paymentCancelBtn');
   const paymentProceedBtn = document.getElementById('paymentProceedBtn');
   const paymentModalMessage = document.getElementById('paymentModalMessage');
-  
+
   if (paymentCancelBtn) {
     paymentCancelBtn.addEventListener('click', () => {
       if (paymentModalContext === 'during') {
@@ -548,11 +553,11 @@ function initializePaymentModal() {
       }
     });
   }
-  
+
   if (paymentProceedBtn) {
     paymentProceedBtn.addEventListener('click', async () => {
       if (!paymentProceedBtn) return;
-      
+
       try {
         paymentProceedBtn.disabled = true;
         paymentProceedBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>Processing...</span>';
@@ -560,7 +565,7 @@ function initializePaymentModal() {
           paymentModalMessage.textContent = 'Creating payment order...';
           paymentModalMessage.className = 'payment-modal-message info';
         }
-        
+
         // Create order for talktime purchase
         const response = await authenticatedFetch('/api/payments/razorpay/order', {
           method: 'POST',
@@ -571,14 +576,14 @@ function initializePaymentModal() {
             receipt: `talktime_${Date.now()}`
           })
         });
-        
+
         const orderData = await response.json();
         if (!response.ok || !orderData?.ok) {
           throw new Error(orderData?.error || 'Order creation failed');
         }
-        
+
         const { order, key_id } = orderData;
-        
+
         const options = {
           key: key_id,
           amount: order.amount,
@@ -598,21 +603,21 @@ function initializePaymentModal() {
                   razorpay_signature: response.razorpay_signature
                 })
               });
-              
+
               const verifyData = await verifyResponse.json();
               if (verifyResponse.ok && verifyData.ok) {
                 // Add talktime
                 addTalktime(100);
-                
+
                 if (paymentModalMessage) {
                   paymentModalMessage.textContent = 'Payment successful! Adding talktime...';
                   paymentModalMessage.className = 'payment-modal-message success';
                 }
-                
+
                 // Hide modal after short delay
                 setTimeout(() => {
                   hidePaymentModal();
-                  
+
                   if (paymentModalContext === 'during') {
                     // Resume session
                     resumeSession();
@@ -648,7 +653,7 @@ function initializePaymentModal() {
             }
           }
         };
-        
+
         const rzp = new Razorpay(options);
         rzp.open();
       } catch (error) {
@@ -683,17 +688,17 @@ async function requestMicrophonePermission() {
       const result = await navigator.permissions.query({ name: 'microphone' });
       permissionStatus = result.state;
       console.log('🎤 Permissions API status:', permissionStatus);
-      
+
       // Only return early if permission is EXPLICITLY denied
       // Even if granted or prompt, we MUST attempt getUserMedia (iOS/Firefox may report incorrectly)
       if (permissionStatus === 'denied') {
         return {
           success: false,
           error: 'Microphone permission was denied. Please enable it in browser settings.\n\n' +
-                 'To fix this in Chrome:\n' +
-                 '1. Click the lock icon (🔒) in the address bar\n' +
-                 '2. Set "Microphone" to "Allow"\n' +
-                 '3. Refresh the page and try again'
+            'To fix this in Chrome:\n' +
+            '1. Click the lock icon (🔒) in the address bar\n' +
+            '2. Set "Microphone" to "Allow"\n' +
+            '3. Refresh the page and try again'
         };
       }
     }
@@ -703,7 +708,7 @@ async function requestMicrophonePermission() {
     console.log('⚠️ Permissions API unavailable or failed (this is normal on some browsers)');
     permissionStatus = 'unknown';
   }
-  
+
   // CRITICAL: Always attempt getUserMedia even if permissions API is inconclusive
   // This ensures compatibility with iOS Safari and Firefox where permissions API is unreliable
 
@@ -742,11 +747,11 @@ async function requestMicrophonePermission() {
     lastError = err;
 
     // If NotReadableError or OverconstrainedError, try fallback (do not fail immediately)
-    if (err.name === 'NotReadableError' || err.name === 'OverconstrainedError' || 
-        err.name === 'TrackStartError' || err.name === 'ConstraintNotSatisfiedError') {
-      
+    if (err.name === 'NotReadableError' || err.name === 'OverconstrainedError' ||
+      err.name === 'TrackStartError' || err.name === 'ConstraintNotSatisfiedError') {
+
       console.log('🔄 Attempt 2: Trying with minimal constraints...');
-      
+
       // Attempt 2: Try with minimal constraints
       try {
         stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -754,15 +759,15 @@ async function requestMicrophonePermission() {
       } catch (retryErr) {
         console.error('❌ Minimal constraints also failed:', retryErr.name, retryErr.message);
         lastError = retryErr;
-        
+
         // Generate specific error message based on error type
         let errorMessage = '';
         if (retryErr.name === 'NotAllowedError' || retryErr.name === 'PermissionDeniedError') {
           errorMessage = 'Microphone permission denied. Please allow microphone access in your browser settings.\n\n' +
-                        'To fix this in Chrome:\n' +
-                        '1. Click the lock icon (🔒) in the address bar\n' +
-                        '2. Set "Microphone" to "Allow"\n' +
-                        '3. Refresh the page and try again';
+            'To fix this in Chrome:\n' +
+            '1. Click the lock icon (🔒) in the address bar\n' +
+            '2. Set "Microphone" to "Allow"\n' +
+            '3. Refresh the page and try again';
         } else if (retryErr.name === 'NotFoundError' || retryErr.name === 'DevicesNotFoundError') {
           errorMessage = 'No microphone found. Please connect a microphone and try again.';
         } else if (retryErr.name === 'NotReadableError' || retryErr.name === 'TrackStartError') {
@@ -772,7 +777,7 @@ async function requestMicrophonePermission() {
         } else {
           errorMessage = `Could not access microphone: ${retryErr.message || 'Unknown error occurred'}. Please check your device settings.`;
         }
-        
+
         return { success: false, error: errorMessage };
       }
     } else {
@@ -780,16 +785,16 @@ async function requestMicrophonePermission() {
       let errorMessage = '';
       if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
         errorMessage = 'Microphone permission denied. Please allow microphone access in your browser settings.\n\n' +
-                      'To fix this in Chrome:\n' +
-                      '1. Click the lock icon (🔒) in the address bar\n' +
-                      '2. Set "Microphone" to "Allow"\n' +
-                      '3. Refresh the page and try again';
+          'To fix this in Chrome:\n' +
+          '1. Click the lock icon (🔒) in the address bar\n' +
+          '2. Set "Microphone" to "Allow"\n' +
+          '3. Refresh the page and try again';
       } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
         errorMessage = 'No microphone found. Please connect a microphone and try again.';
       } else {
         errorMessage = `Could not access microphone: ${err.message || 'Unknown error occurred'}. Please check your device settings.`;
       }
-      
+
       return { success: false, error: errorMessage };
     }
   }
@@ -826,7 +831,7 @@ async function requestMicrophonePermission() {
         break;
       }
     }
-    
+
     activationAttempts++;
     if (activationAttempts < maxActivationAttempts) {
       await new Promise(resolve => setTimeout(resolve, activationDelay));
@@ -874,10 +879,10 @@ function toggleMicrophone() {
     console.log('⚠️ Cannot toggle mic: session not active');
     return;
   }
-  
+
   isMicMuted = !isMicMuted;
   let tracksControlled = 0;
-  
+
   // Method 1: Mute/unmute through stored media stream (Primary Method)
   // This is the stream we got during permission request
   if (userMediaStream) {
@@ -889,7 +894,7 @@ function toggleMicrophone() {
       console.log(`🎤 Track "${track.label || 'Unknown'}": ${isMicMuted ? 'MUTED' : 'UNMUTED'} (enabled: ${wasEnabled} → ${!isMicMuted}, state=${track.readyState})`);
     });
   }
-  
+
   // Method 2: Try to get stream from conversation object if available
   // Some SDK versions expose the stream
   if (conversation) {
@@ -905,7 +910,7 @@ function toggleMicrophone() {
           });
         }
       }
-      
+
       // Try to access through other possible properties
       if (conversation.localStream) {
         conversation.localStream.getAudioTracks().forEach(track => {
@@ -918,7 +923,7 @@ function toggleMicrophone() {
       // Expected - not all SDK versions expose the stream this way
     }
   }
-  
+
   // Method 3: Disable/enable turn detection through ElevenLabs conversation
   // This prevents the agent from processing user input when muted
   if (conversation) {
@@ -929,7 +934,7 @@ function toggleMicrophone() {
       } else {
         conversation.setConversationTurnDetection({ enabled: true });
         console.log('🎤 Turn detection enabled - agent can process user input');
-        
+
         // [FIX] Also ensure microphone tracks are enabled when unmuting
         if (userMediaStream) {
           userMediaStream.getAudioTracks().forEach(track => {
@@ -946,7 +951,7 @@ function toggleMicrophone() {
       console.warn('⚠️ Could not update conversation turn detection:', e);
     }
   }
-  
+
   // Log the result
   if (tracksControlled > 0) {
     console.log(`✅ Microphone ${isMicMuted ? 'MUTED' : 'UNMUTED'} - ${tracksControlled} audio track(s) controlled`);
@@ -954,31 +959,31 @@ function toggleMicrophone() {
     console.warn('⚠️ No audio tracks found. Using turn detection method only.');
     console.log(`ℹ️ Microphone ${isMicMuted ? 'MUTED' : 'UNMUTED'} via turn detection`);
   }
-  
+
   // Update UI
   updateMicButtonState(isMicMuted);
-  
+
   // Show brief status update, then REVERT to main state
   if (callStatus) {
     // [CRITICAL FIX] Remove hidden class so CSS !important doesn't block visibility
     callStatus.classList.remove('hidden');
-    
+
     callStatus.textContent = isMicMuted ? '🔇 Microphone Muted' : '🎤 Microphone Active';
     callStatus.style.display = 'inline-block';
-    
+
     // Remove any existing classes temporarily
     callStatus.classList.remove('speaking');
-    
+
     setTimeout(() => {
       // CRITICAL FIX: Don't hide it! Revert to correct state.
       if (sessionActive) {
-         // If muted, stay muted text, otherwise go back to Listening
-         if (isMicMuted) {
-             callStatus.textContent = '🔇 Muted';
-         } else {
-             // Force refresh the visual state
-             toggleVoiceVisuals('listening');
-         }
+        // If muted, stay muted text, otherwise go back to Listening
+        if (isMicMuted) {
+          callStatus.textContent = '🔇 Muted';
+        } else {
+          // Force refresh the visual state
+          toggleVoiceVisuals('listening');
+        }
       }
     }, 2000);
   }
@@ -986,10 +991,10 @@ function toggleMicrophone() {
 
 function updateMicButtonState(muted) {
   if (!micBtn) return;
-  
+
   const icon = micBtn.querySelector('.control-btn-inner i') || micBtn.querySelector('i');
   const label = micBtn.querySelector('.control-label');
-  
+
   if (muted) {
     // Muted state - red background, slash icon
     micBtn.classList.add('muted');
@@ -1019,7 +1024,7 @@ function updateMicButtonState(muted) {
 // This periodically checks and enforces the mute state in case tracks get re-enabled
 function enforceMicMuteState() {
   if (!sessionActive || !isMicMuted) return;
-  
+
   // Enforce mute on stored stream
   if (userMediaStream) {
     userMediaStream.getAudioTracks().forEach(track => {
@@ -1029,7 +1034,7 @@ function enforceMicMuteState() {
       }
     });
   }
-  
+
   // Also enforce through conversation turn detection
   if (conversation) {
     try {
@@ -1046,7 +1051,7 @@ async function startVoiceSession() {
   timeRemaining = 180;
   totalTalkTime = 0;
   isMicMuted = false;
-  
+
   // 2. UI Setup (Hide Start, Show Call)
   if (screens.loading) screens.loading.classList.add('hidden');
   if (screens.ronitStart) screens.ronitStart.classList.add('hidden');
@@ -1055,7 +1060,7 @@ async function startVoiceSession() {
     screens.call.style.display = 'flex';
   }
   if (footer) footer.style.display = 'none';
-  
+
   // Hide Side Panel
   const sidePanel = document.getElementById('sidePanel');
   const sidePanelToggle = document.getElementById('sidePanelToggle');
@@ -1067,7 +1072,7 @@ async function startVoiceSession() {
   // 3. CRITICAL: Request Microphone FIRST
   // Do NOT touch AudioContext before this line completes
   const permissionResult = await requestMicrophonePermission();
-  
+
   if (permissionResult !== true) {
     const errorMsg = permissionResult?.error || 'Microphone access denied.';
     alert(errorMsg);
@@ -1077,7 +1082,7 @@ async function startVoiceSession() {
     if (footer) footer.style.display = 'block';
     if (sidePanel) sidePanel.style.display = 'flex';
     if (sidePanelToggle) sidePanelToggle.style.display = 'flex';
-    return; 
+    return;
   }
 
   // 4. NOW it is safe to wake up AudioContext
@@ -1085,21 +1090,58 @@ async function startVoiceSession() {
     const AudioContext = window.AudioContext || window.webkitAudioContext;
     if (AudioContext) {
       const ctx = new AudioContext();
-      await ctx.resume(); 
+      await ctx.resume();
       // Keep ctx alive or close it based on need, but resume is key
     }
   } catch (e) {
     console.warn("AudioContext wakeup warning:", e);
   }
 
-  // 5. Connect to Backend
-  updateStatus('Connecting to AI service...', 'connecting');
-  
+  // 5. OBSERVE GOD LEVEL HANDSHAKE
   try {
-    const cfgRes = await fetch('/config', {cache:'no-store'});
+    updateStatus('Connecting to Secure Server...', 'connecting');
+
+    const startRes = await authenticatedFetch('/api/session/start', { method: 'POST' });
+
+    // Handle "Server Busy" (503) from Gatekeeper
+    if (startRes.status === 503) {
+      alert("⚠️ High Traffic: All AI coaches are currently busy. Please try again in 30 seconds.");
+      updateStatus('Server Busy', 'error');
+      // Reset UI
+      endSession();
+      return;
+    }
+
+    const startData = await startRes.json();
+
+    if (!startData.ok) {
+      if (startRes.status === 402 || startData.error === "Insufficient Funds") {
+        showPaymentModal('start');
+        return;
+      }
+      throw new Error(startData.error || "Session failed");
+    }
+
+    console.log("✅ Secure Session Started. ID:", startData.session_id);
+
+    // Initialize UI with server truth
+    updateTalktimeDisplay(startData.remaining_seconds);
+    timeRemaining = parseInt(startData.remaining_seconds);
+    sessionStorage.setItem('userTalktime', timeRemaining);
+
+  } catch (e) {
+    console.error("Session start failed", e);
+    updateStatus('Connection Failed', 'error');
+    return;
+  }
+
+  updateStatus('Connecting to AI service...', 'connecting');
+
+  try {
+    const cfgRes = await fetch('/config', { cache: 'no-store' });
     if (!cfgRes.ok) throw new Error('Failed to fetch configuration');
     const cfg = await cfgRes.json();
-    
+
     const tokenRes = await fetch('/conversation-token');
     if (!tokenRes.ok) throw new Error('Token request failed');
     const tokenData = await tokenRes.json();
@@ -1110,7 +1152,7 @@ async function startVoiceSession() {
     }
 
     console.log('🎙️ Starting conversation...');
-    
+
     // [PRODUCTION FIX] Increased timeout and better handling
     const connectionTimeout = setTimeout(() => {
       if (!sessionActive && !isReconnecting) {
@@ -1122,59 +1164,59 @@ async function startVoiceSession() {
 
     // Start ElevenLabs Session
     console.log('🔑 Using token:', token.substring(0, 10) + '...');
-    
+
     conversation = await Conversation.startSession({
       agentId: cfg.agentId,
       conversationToken: token,
-      
+
       // [FIX] Removing overrides to ensure stability
       // overrides: { ... }
-      
+
       // 1. SMART LATENCY TRIGGER (The Alternate Fix)
       onMessage: ({ source, message }) => {
         const speaker = source === 'user' ? 'User' : 'Coach';
         userTranscript += `[${new Date().toLocaleTimeString()}] ${speaker}: ${message}\n`;
-        
+
         // [PRODUCTION FIX] Update connection activity timestamp
         lastConnectionTime = Date.now();
-        
+
         if (source === 'ai' || source === 'agent' || source === 'assistant') {
           console.log(`💬 Text received (${message.length} chars). Syncing visuals...`);
-          
+
           // Clear any existing timers to prevent overlaps
           if (speakTimeout) clearTimeout(speakTimeout);
           if (silenceTimeout) clearTimeout(silenceTimeout);
 
           // STEP A: Wait for audio buffering (Latency Compensation)
           speakTimeout = setTimeout(() => {
-             toggleVoiceVisuals('speaking');
-             
-             // STEP B: Calculate how long to stay green
-             // Average speaking rate is ~15-20 chars per second. 
-             // 50ms per char is a safe average for AI voices.
-             const estimatedDuration = Math.max(1500, message.length * SPEAKING_RATE_MS);
-             
-             // STEP C: Schedule the "Silence" switch
-             silenceTimeout = setTimeout(() => {
-                toggleVoiceVisuals('listening');
-             }, estimatedDuration);
-             
+            toggleVoiceVisuals('speaking');
+
+            // STEP B: Calculate how long to stay green
+            // Average speaking rate is ~15-20 chars per second. 
+            // 50ms per char is a safe average for AI voices.
+            const estimatedDuration = Math.max(1500, message.length * SPEAKING_RATE_MS);
+
+            // STEP C: Schedule the "Silence" switch
+            silenceTimeout = setTimeout(() => {
+              toggleVoiceVisuals('listening');
+            }, estimatedDuration);
+
           }, AUDIO_LATENCY_MS); // Wait 100ms before starting (reduced for snappier visuals)
         }
       },
 
       // 2. SAFETY SWITCH (Ensures we never get "Stuck")
       onModeChange: (mode) => {
-        const currentMode = mode.mode || mode; 
+        const currentMode = mode.mode || mode;
         console.log('🔄 Mode:', currentMode);
-        
+
         // [PRODUCTION FIX] Update connection activity on mode changes
         lastConnectionTime = Date.now();
-        
+
         // If the SDK explicitly says "listening", we trust it and cut the visual short.
         if (currentMode === 'listening') {
-           if (silenceTimeout) clearTimeout(silenceTimeout);
-           toggleVoiceVisuals('listening');
+          if (silenceTimeout) clearTimeout(silenceTimeout);
+          toggleVoiceVisuals('listening');
         }
       },
 
@@ -1185,19 +1227,19 @@ async function startVoiceSession() {
         isReconnecting = false;
         disconnectRetryCount = 0; // Reset retry count on successful connection
         lastConnectionTime = Date.now();
-        
+
         // [FIX] Simplified Stream Management
         // Just log status, don't mess with streams aggressively
         console.log('✅ Connection established');
 
         if (userMediaStream && userMediaStream.active) {
-             console.log('🎤 Permission stream active');
+          console.log('🎤 Permission stream active');
         }
-        
+
         updateMicButtonState(false);
-        
+
         if (window.micMuteInterval) clearInterval(window.micMuteInterval);
-        
+
         // [PRODUCTION FIX] Start connection health monitoring
         startConnectionHealthCheck();
 
@@ -1208,14 +1250,14 @@ async function startVoiceSession() {
           const statusText = connectionStatus.querySelector('.status-text');
           if (statusText) statusText.textContent = 'Connected';
         }
-        
+
         // Initial Status
         updateStatus('Connected', 'default');
         setTimeout(() => { toggleVoiceVisuals('listening'); }, 100);
-        
+
         startTimer();
         startTalkTimeTracking();
-        
+
         console.log('✅ Session connected successfully');
         console.log('🎤 Microphone should now be active - try speaking to the bot!');
       },
@@ -1223,14 +1265,14 @@ async function startVoiceSession() {
       onDisconnect: () => {
         clearTimeout(connectionTimeout);
         stopConnectionHealthCheck();
-        
+
         // Clear sync timers
         if (speakTimeout) clearTimeout(speakTimeout);
         if (silenceTimeout) clearTimeout(silenceTimeout);
-        
+
         // [PRODUCTION FIX] Don't immediately end session - try to recover
         console.warn('⚠️ Connection disconnected');
-        
+
         // Only end session if we've been disconnected for a while or retries failed
         if (disconnectRetryCount >= MAX_RETRY_ATTEMPTS) {
           console.error('❌ Max reconnection attempts reached. Ending session.');
@@ -1239,18 +1281,18 @@ async function startVoiceSession() {
           setTimeout(() => endSession(), 2000);
           return;
         }
-        
+
         // Attempt reconnection
         if (sessionActive && !isReconnecting) {
           isReconnecting = true;
           disconnectRetryCount++;
           console.log(`🔄 Attempting reconnection (${disconnectRetryCount}/${MAX_RETRY_ATTEMPTS})...`);
-          
+
           updateStatus(`Reconnecting... (${disconnectRetryCount}/${MAX_RETRY_ATTEMPTS})`, 'connecting');
-          
+
           // Clear retry timeout if exists
           if (disconnectRetryTimeout) clearTimeout(disconnectRetryTimeout);
-          
+
           // Wait before retrying
           disconnectRetryTimeout = setTimeout(() => {
             if (sessionActive) {
@@ -1269,19 +1311,19 @@ async function startVoiceSession() {
       onError: (err) => {
         clearTimeout(connectionTimeout);
         stopConnectionHealthCheck();
-        
+
         // Clear sync timers
         if (speakTimeout) clearTimeout(speakTimeout);
         if (silenceTimeout) clearTimeout(silenceTimeout);
-        
+
         console.error('❌ Connection error:', err);
-        
+
         // [PRODUCTION FIX] Handle errors more gracefully
         const errorMessage = err.message || err.toString() || 'Unknown error';
-        const isFatalError = errorMessage.includes('closed') || 
-                            errorMessage.includes('failed') ||
-                            errorMessage.includes('timeout');
-        
+        const isFatalError = errorMessage.includes('closed') ||
+          errorMessage.includes('failed') ||
+          errorMessage.includes('timeout');
+
         if (isFatalError && disconnectRetryCount >= MAX_RETRY_ATTEMPTS) {
           // Fatal error after retries - end session
           toggleVoiceVisuals('idle');
@@ -1293,16 +1335,16 @@ async function startVoiceSession() {
           console.warn('⚠️ Fatal error detected, attempting recovery...');
           disconnectRetryCount++;
           updateStatus(`Recovering from error... (${disconnectRetryCount}/${MAX_RETRY_ATTEMPTS})`, 'connecting');
-          
+
           // Force a re-connect attempt if the SDK doesn't do it automatically
           if (disconnectRetryCount <= MAX_RETRY_ATTEMPTS) {
-             setTimeout(() => {
-                 if (sessionActive && !conversation.isConnected) {
-                     console.log('🔄 Triggering manual reconnection...');
-                     // We can't easily "re-start" the same conversation object in all SDK versions
-                     // But we can signal the user to try again if it fails
-                 }
-             }, 3000);
+            setTimeout(() => {
+              if (sessionActive && !conversation.isConnected) {
+                console.log('🔄 Triggering manual reconnection...');
+                // We can't easily "re-start" the same conversation object in all SDK versions
+                // But we can signal the user to try again if it fails
+              }
+            }, 3000);
           }
         } else {
           // Non-fatal error - log but continue
@@ -1326,28 +1368,28 @@ function updateStatus(text, visualState) {
     // Only update text if we are NOT in the middle of a "speaking/listening" flow
     // or if it's a critical connection message (Connecting/Disconnected)
     const isConnectionMessage = text.includes('Connect') || text.includes('Disconnect') || text.includes('Error');
-    
+
     if (isConnectionMessage) {
-       // [CRITICAL FIX] Remove hidden class here too
-       callStatus.classList.remove('hidden');
-       
-       callStatus.textContent = text;
-       callStatus.style.display = 'inline-block';
-       callStatus.classList.remove('speaking'); // Ensure it's gray for status messages
+      // [CRITICAL FIX] Remove hidden class here too
+      callStatus.classList.remove('hidden');
+
+      callStatus.textContent = text;
+      callStatus.style.display = 'inline-block';
+      callStatus.classList.remove('speaking'); // Ensure it's gray for status messages
     }
   }
-  
+
   // Clear the "Say Hello" prompt timeout if status changes
   if (text !== 'Say "Hello" to start' && helloPromptTimeout) {
     clearTimeout(helloPromptTimeout);
     helloPromptTimeout = null;
   }
-  
+
   // Handle Ring Animations
   const profileContainer = document.querySelector('#screen-call .profile-container');
   if (callRing) {
-    callRing.className = 'ring'; 
-    
+    callRing.className = 'ring';
+
     if (visualState === 'connecting') {
       callRing.classList.add('connecting');
       if (profileContainer) {
@@ -1370,12 +1412,12 @@ function startTimer() {
     const m = Math.floor(timeRemaining / 60);
     const s = timeRemaining % 60;
     if (timerDisplay) {
-      timerDisplay.textContent = `${m}:${s < 10 ? '0'+s : s}`;
+      timerDisplay.textContent = `${m}:${s < 10 ? '0' + s : s}`;
     }
-    
+
     // Update loading screen talk time if visible
     if (loadingTalkTimeValue && screens.loading && !screens.loading.classList.contains('hidden')) {
-      loadingTalkTimeValue.textContent = `${m}:${s < 10 ? '0'+s : s}`;
+      loadingTalkTimeValue.textContent = `${m}:${s < 10 ? '0' + s : s}`;
     }
 
     // Show buy talk time button when less than 1 minute remaining
@@ -1397,104 +1439,66 @@ function startTimer() {
   }, 1000);
 }
 
-// Start tracking total talk time
+// Start tracking total talk time - GOD LEVEL IMPLEMENTATION
+// GOD LEVEL FRONTEND LOGIC
+
 function startTalkTimeTracking() {
-  totalTalkTime = 0;
-  talkTimeStartTime = Date.now();
-  
-  // Set initial talktime from storage for UI reference
-  let localBalance = parseInt(sessionStorage.getItem('userTalktime') || '0', 10);
-  
-  // Set initial talktime when session starts
-  if (initialTalktime === 0 && localBalance > 0) {
-    initialTalktime = localBalance;
-    sessionStorage.setItem('initialTalktime', initialTalktime.toString());
-  }
-  
-  if (talkTimeInterval) clearInterval(talkTimeInterval);
   if (heartbeatInterval) clearInterval(heartbeatInterval);
-  
-  // 1. UI TIMER (Visual only - runs every second)
+  if (talkTimeInterval) clearInterval(talkTimeInterval);
+
+  // 1. VISUAL TIMER (Local) - Runs every 1s
   talkTimeInterval = setInterval(() => {
-    if (sessionActive && !isSessionPaused) {
-      // Update Total Talk Time (elapsed)
-      const elapsed = Math.floor((Date.now() - talkTimeStartTime) / 1000);
-      totalTalkTime = elapsed;
-      
-      // Visually decrement local balance for smooth UI
-      if (localBalance > 0) {
-        localBalance--;
-        sessionStorage.setItem('userTalktime', localBalance.toString());
-        updateTalktimeDisplay(localBalance); // Reuse your existing display updater
-      } else {
-        // UI says 0, pause immediately while waiting for server confirmation
-        pauseSessionForPayment();
-      }
-      
-      if (talkTimeValue) talkTimeValue.textContent = totalTalkTime;
+    let currentDisplay = parseFloat(sessionStorage.getItem('userTalktime') || 0);
+
+    // STRICT MODE: Local Kill Switch
+    if (currentDisplay <= 0 && sessionActive) {
+      console.warn("⛔ Timer hit 0. Cutting connection immediately.");
+      endSession(); // Cut mic
+      showPaymentModal('during'); // Demand payment
+      return;
+    }
+
+    if (currentDisplay > 0 && sessionActive) {
+      currentDisplay -= 1; // Visually deduct 1s
+      updateTalktimeDisplay(currentDisplay);
     }
   }, 1000);
 
-  // 2. SERVER HEARTBEAT (The Source of Truth - runs every 5 seconds)
+  // 2. SERVER SYNC (The Authority) - Optimized to 5 seconds
   heartbeatInterval = setInterval(async () => {
-    if (sessionActive && !isSessionPaused) {
-      const email = sessionStorage.getItem('userEmail');
-      if (!email) {
-        console.warn('⚠️ Heartbeat skipped: No email in sessionStorage');
+    if (!sessionActive) return;
+
+    try {
+      const userEmail = sessionStorage.getItem('userEmail');
+      const response = await authenticatedFetch('/api/session/heartbeat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: userEmail })
+      });
+
+      const data = await response.json();
+
+      if (data.action === 'terminate' || data.remaining_seconds <= 0) {
+        console.warn("Server ordered termination.");
+        sessionStorage.setItem('userTalktime', '0');
+        updateTalktimeDisplay(0);
+        endSession();
+        showPaymentModal('during');
         return;
       }
 
-      try {
-        console.log('💓 Sending heartbeat...', { seconds: HEARTBEAT_RATE / 1000 });
-        // Send heartbeat to deduct 5 seconds
-        const response = await authenticatedFetch('/api/user/deduct-time', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            seconds: HEARTBEAT_RATE / 1000 
-          })
-        });
-
-        if (!response.ok) {
-          console.error('❌ Heartbeat failed:', response.status, response.statusText);
-          const errorText = await response.text();
-          console.error('Error response:', errorText);
-          return;
+      if (data.ok) {
+        sessionStorage.setItem('userTalktime', data.remaining_seconds);
+        let localTime = parseFloat(sessionStorage.getItem('userTalktime'));
+        if (Math.abs(localTime - data.remaining_seconds) > 2) {
+          updateTalktimeDisplay(Math.floor(data.remaining_seconds));
         }
-
-        const data = await response.json();
-        console.log('✅ Heartbeat response:', data);
-
-        if (data.ok) {
-          // Sync local balance with authoritative server balance
-          localBalance = data.remaining;
-          sessionStorage.setItem('userTalktime', localBalance.toString());
-          
-          // Update all displays with the synced balance
-          updateTalktimeDisplay(localBalance);
-          
-          // Double check: If server says 0, kill it.
-          if (localBalance <= 0) {
-             console.log('⛔ Server reports 0 talktime. Pausing session.');
-             pauseSessionForPayment();
-          }
-        } else if (data.status === 'exhausted') {
-          // Hard Stop
-          console.log('⛔ Talktime exhausted on server.');
-          pauseSessionForPayment();
-        }
-      } catch (err) {
-        console.warn('⚠️ Heartbeat failed (network error). Will retry...', err);
-        console.error('Heartbeat error details:', err.message, err.stack);
-        // Optional: If network fails 3 times in a row, pause session for security
       }
+
+    } catch (e) {
+      console.error("Heartbeat skipped:", e);
     }
-  }, HEARTBEAT_RATE);
-  
-  // Initial display
-  updateTalkTimeDisplay();
-  
-  console.log('✅ Talk time tracking started (UI timer + Server heartbeat)');
+  }, 5000);
 }
 
 // Stop tracking talk time
@@ -1517,13 +1521,13 @@ function updateTalkTimeDisplay() {
     // Display total talk time in seconds
     talkTimeValue.textContent = totalTalkTime;
   }
-  
+
   // Also update loading screen talk time if visible
   if (loadingTalkTimeValue && !screens.loading.classList.contains('hidden')) {
     // Display time remaining in seconds
     loadingTalkTimeValue.textContent = timeRemaining;
   }
-  
+
   // Check if talktime is 0 during active session
   if (sessionActive) {
     const currentTalktime = parseInt(sessionStorage.getItem('userTalktime') || '0', 10);
@@ -1538,9 +1542,9 @@ async function initializeTalktime() {
   // Get user email
   const emailInput = document.getElementById('userEmail');
   const email = emailInput ? emailInput.value?.trim() : sessionStorage.getItem('userEmail') || '';
-  
+
   // Removed test bonus code - talktime now syncs directly from server
-  
+
   if (!email) {
     // No email yet, use default
     let talktime = parseInt(sessionStorage.getItem('userTalktime') || '0', 10);
@@ -1551,25 +1555,25 @@ async function initializeTalktime() {
     updateTalktimeDisplay(talktime);
     return;
   }
-  
+
   // Check with backend and get talktime (includes welcome bonus if new user)
   try {
     const response = await authenticatedFetch('/api/user/talktime', {
       method: 'GET'
     });
-    
+
     const data = await response.json();
-    
+
     if (data.ok) {
       const talktime = data.talktime || 0;
       // Always sync with server value (server is source of truth)
       sessionStorage.setItem('userTalktime', talktime.toString());
-      
+
       // Clear test bonus flag if it exists (cleanup)
       if (sessionStorage.getItem('testBonusAdded')) {
         sessionStorage.removeItem('testBonusAdded');
       }
-      
+
       // Set initial talktime for progress bar
       // Get initial from stored or current
       const storedInitial = parseInt(sessionStorage.getItem('initialTalktime') || '0', 10);
@@ -1579,9 +1583,15 @@ async function initializeTalktime() {
         initialTalktime = talktime;
         sessionStorage.setItem('initialTalktime', talktime.toString());
       }
-      
+
       // Update all talktime displays with server value
       updateTalktimeDisplay(talktime);
+
+      // Community Member Badge
+      if (data.is_community_member) {
+        const badge = document.getElementById('vipBadge');
+        if (badge) badge.classList.remove('hidden');
+      }
     } else {
       // Fallback to sessionStorage
       let talktime = parseInt(sessionStorage.getItem('userTalktime') || '0', 10);
@@ -1605,7 +1615,7 @@ async function initializeTalktime() {
 function startTalktimeRefresh() {
   // Clear any existing interval
   if (talktimeRefreshInterval) clearInterval(talktimeRefreshInterval);
-  
+
   // Refresh talktime every 30 seconds
   talktimeRefreshInterval = setInterval(async () => {
     try {
@@ -1615,22 +1625,22 @@ function startTalktimeRefresh() {
         console.warn('⚠️ Failed to refresh talktime:', response.status);
         return;
       }
-      
+
       const data = await response.json();
       if (data.ok && data.talktime !== undefined) {
         const serverTalktime = data.talktime || 0;
         const currentLocalTalktime = parseInt(sessionStorage.getItem('userTalktime') || '0', 10);
-        
+
         // Always sync with server value (server is source of truth)
         // This ensures admin updates are reflected immediately
         if (serverTalktime !== currentLocalTalktime) {
           console.log(`🔄 Talktime refreshed: ${currentLocalTalktime}s → ${serverTalktime}s`);
           sessionStorage.setItem('userTalktime', serverTalktime.toString());
-          
+
           // Always update display to match server value
           // During session: heartbeat handles deductions, but admin changes override
           updateTalktimeDisplay(serverTalktime);
-          
+
           // If server says 0 and we're in a session, pause it
           if (sessionActive && serverTalktime <= 0) {
             console.log('⛔ Server reports 0 talktime. Pausing session.');
@@ -1655,7 +1665,7 @@ function stopTalktimeRefresh() {
 function startOnlinePing() {
   // Clear any existing interval
   if (onlinePingInterval) clearInterval(onlinePingInterval);
-  
+
   // Ping server every 60 seconds to update last_login
   onlinePingInterval = setInterval(async () => {
     try {
@@ -1663,12 +1673,12 @@ function startOnlinePing() {
       const response = await authenticatedFetch('/api/user/ping', {
         method: 'POST'
       });
-      
+
       if (!response.ok) {
         console.warn('⚠️ Failed to ping server:', response.status);
         return;
       }
-      
+
       // Ping successful - user is now marked as online
       console.log('💚 Online status ping sent');
     } catch (error) {
@@ -1695,10 +1705,10 @@ function updateTalktimeDisplay(talktime) {
   if (talktimeValue) talktimeValue.textContent = talktime.toLocaleString();
   if (loadingTalktimeValue) loadingTalktimeValue.textContent = talktime.toLocaleString();
   if (callTalktimeValue) callTalktimeValue.textContent = talktime.toLocaleString();
-  
+
   // Update progress bar (shows seconds)
   updateTalktimeProgressBar(talktime);
-  
+
   // Save to sessionStorage
   sessionStorage.setItem('userTalktime', talktime.toString());
 }
@@ -1707,17 +1717,17 @@ function updateTalktimeDisplay(talktime) {
 function updateTalktimeProgressBar(currentTalktime) {
   const progressFill = document.getElementById('talktimeProgressFill');
   const progressText = document.getElementById('talktimeProgressText');
-  
+
   if (!progressFill || !progressText) return;
-  
+
   // Get initial talktime from sessionStorage or use stored initial
   let maxTalktime = parseInt(sessionStorage.getItem('initialTalktime') || '0', 10);
-  
+
   // If no initial talktime stored, try to get it from the variable
   if (maxTalktime === 0) {
     maxTalktime = initialTalktime;
   }
-  
+
   // If still no initial talktime, use current talktime as max (for display purposes)
   // But only if current is greater than 0
   if (maxTalktime === 0 && currentTalktime > 0) {
@@ -1726,21 +1736,21 @@ function updateTalktimeProgressBar(currentTalktime) {
     initialTalktime = currentTalktime;
     sessionStorage.setItem('initialTalktime', currentTalktime.toString());
   }
-  
+
   // If still 0, use a default max of 100 for display
   if (maxTalktime === 0) {
     maxTalktime = 100;
   }
-  
+
   // Calculate percentage (how much talktime is remaining)
   const percentage = maxTalktime > 0 ? Math.min((currentTalktime / maxTalktime) * 100, 100) : 0;
-  
+
   // Update progress bar width
   progressFill.style.width = `${percentage}%`;
-  
+
   // Update progress text (show seconds)
   progressText.textContent = `${currentTalktime.toLocaleString()}s / ${maxTalktime.toLocaleString()}s`;
-  
+
   // Update color based on percentage
   progressFill.classList.remove('low', 'critical');
   if (percentage <= 10 && currentTalktime > 0) {
@@ -1755,13 +1765,13 @@ function addTalktime(amount) {
   let currentTalktime = parseInt(sessionStorage.getItem('userTalktime') || '0', 10);
   if (isNaN(currentTalktime)) currentTalktime = 0;
   const newTalktime = currentTalktime + amount;
-  
+
   // If this is the first time adding talktime and no initial is set, set it
   if (initialTalktime === 0 && newTalktime > 0) {
     initialTalktime = newTalktime;
     sessionStorage.setItem('initialTalktime', initialTalktime.toString());
   }
-  
+
   updateTalktimeDisplay(newTalktime);
   return newTalktime;
 }
@@ -1772,12 +1782,12 @@ function deductTalktime(amount) {
   if (isNaN(currentTalktime)) currentTalktime = 0;
   const newTalktime = Math.max(0, currentTalktime - amount);
   updateTalktimeDisplay(newTalktime);
-  
+
   // Check if talktime reached 0 during active session
   if (sessionActive && newTalktime <= 0) {
     pauseSessionForPayment();
   }
-  
+
   return newTalktime;
 }
 
@@ -1787,17 +1797,17 @@ async function handleBuyTalktime() {
   const sidePanelBuyBtn = document.getElementById('sidePanelBuyTalktime');
   const mainBuyBtn = btnBuyTalktime;
   const activeButton = sidePanelBuyBtn || mainBuyBtn;
-  
+
   if (!activeButton) {
     console.error('Buy talktime button not found');
     return;
   }
-  
+
   try {
     activeButton.disabled = true;
     const originalHTML = activeButton.innerHTML;
     activeButton.innerHTML = '<div class="side-panel-buy-icon"><i class="fas fa-spinner fa-spin"></i></div><span>Processing...</span>';
-    
+
     // Create order for talktime purchase (₹499 = 49900 paise)
     const response = await fetch('/api/payments/razorpay/order', {
       method: 'POST',
@@ -1808,15 +1818,15 @@ async function handleBuyTalktime() {
         receipt: `talktime_${Date.now()}`
       })
     });
-    
+
     const orderData = await response.json();
-    
+
     if (!response.ok || !orderData?.ok) {
       throw new Error(orderData?.error || 'Order creation failed');
     }
-    
+
     const { order, key_id } = orderData;
-    
+
     const options = {
       key: key_id,
       amount: order.amount,
@@ -1824,7 +1834,7 @@ async function handleBuyTalktime() {
       name: 'AI Voice Coach',
       description: 'Purchase Talktime (100 talktime)',
       order_id: order.id,
-      handler: async function(response) {
+      handler: async function (response) {
         try {
           // Verify payment
           const verifyResponse = await authenticatedFetch('/api/payments/razorpay/verify', {
@@ -1836,7 +1846,7 @@ async function handleBuyTalktime() {
               razorpay_signature: response.razorpay_signature
             })
           });
-          
+
           const verifyData = await verifyResponse.json();
           if (verifyResponse.ok && verifyData.ok) {
             // Add talktime (backend already added it, but update frontend display)
@@ -1855,7 +1865,7 @@ async function handleBuyTalktime() {
         }
       },
       modal: {
-        ondismiss: function() {
+        ondismiss: function () {
           activeButton.disabled = false;
           activeButton.innerHTML = originalHTML;
         }
@@ -1864,10 +1874,10 @@ async function handleBuyTalktime() {
         color: '#007AFF'
       }
     };
-    
+
     const rzp = new Razorpay(options);
     rzp.open();
-    
+
   } catch (error) {
     console.error('Error buying talktime:', error);
     alert('Error: ' + (error.message || 'Payment failed. Please try again.'));
@@ -1880,145 +1890,28 @@ async function handleBuyTalktime() {
   }
 }
 
-// Handle buying talk time
-async function handleBuyTalkTime() {
-  if (!buyTalkTimeBtn) return;
-  
-  buyTalkTimeBtn.disabled = true;
-  buyTalkTimeBtn.textContent = 'Processing...';
-  
-  try {
-    // Load Razorpay script if not already loaded
-    if (typeof Razorpay === 'undefined') {
-      const script = document.createElement('script');
-      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
-      script.onload = () => proceedWithPayment();
-      document.head.appendChild(script);
-    } else {
-      proceedWithPayment();
-    }
-  } catch (error) {
-    console.error('Error buying talk time:', error);
-    alert('Error initiating payment. Please try again.');
-    buyTalkTimeBtn.disabled = false;
-    buyTalkTimeBtn.textContent = '⏱️ Buy More Talk Time';
-  }
-}
+// Duplicate payment logic removed.
+// We strictly use handleBuyTalktime() defined earlier.
 
-async function proceedWithPayment() {
-  try {
-    // Create order for talk time purchase (30 minutes = 1800 seconds)
-    const response = await authenticatedFetch('/api/payments/razorpay/order', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        amount_paisa: 49900, // ₹499 in paise
-        currency: 'INR',
-        receipt: `talktime_${Date.now()}`
-      })
-    });
-    
-    const orderData = await response.json();
-    
-    if (!response.ok || !orderData?.ok) {
-      throw new Error(orderData?.error || 'Order creation failed');
-    }
-    
-    const { order, key_id } = orderData;
-    
-    const options = {
-      key: key_id,
-      amount: order.amount,
-      currency: order.currency,
-      name: 'AI Voice Coach',
-      description: 'Add 30 minutes of talk time',
-      order_id: order.id,
-      handler: async function(response) {
-        try {
-          // Verify payment
-          const verifyResponse = await authenticatedFetch('/api/payments/razorpay/verify', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              razorpay_order_id: response.razorpay_order_id,
-              razorpay_payment_id: response.razorpay_payment_id,
-              razorpay_signature: response.razorpay_signature
-            })
-          });
-          
-          const verifyData = await verifyResponse.json();
-          if (verifyResponse.ok && verifyData.ok) {
-            // Payment verified - add 30 minutes (1800 seconds) and talktime
-            // Note: Backend already added 100 talktime, but this function adds 50 more
-            // You may want to adjust this logic based on your business rules
-            addTalkTime(1800);
-            // Add additional talktime for successful talk time purchase (50 talktime)
-            addTalktime(50);
-            buyTalkTimeBtn.disabled = false;
-            buyTalkTimeBtn.textContent = '⏱️ Buy More Talk Time';
-            buyTalkTimeBtn.style.display = 'none';
-            alert('Payment successful! 30 minutes added to your call and talktime added to your account.');
-          } else {
-            throw new Error(verifyData?.error || 'Payment verification failed');
-          }
-        } catch (error) {
-          console.error('Payment verification error:', error);
-          buyTalkTimeBtn.disabled = false;
-          buyTalkTimeBtn.textContent = '⏱️ Buy More Talk Time';
-          alert('Payment verification failed. Please contact support if the amount was deducted.');
-        }
-      },
-      modal: {
-        ondismiss: function() {
-          buyTalkTimeBtn.disabled = false;
-          buyTalkTimeBtn.textContent = '⏱️ Buy More Talk Time';
-        }
-      },
-      theme: {
-        color: '#007AFF'
-      }
-    };
-    
-    const rzp = new Razorpay(options);
-    rzp.open();
-    
-  } catch (error) {
-    console.error('Payment error:', error);
-    alert('Error: ' + (error.message || 'Payment failed. Please try again.'));
-    buyTalkTimeBtn.disabled = false;
-    buyTalkTimeBtn.textContent = '⏱️ Buy More Talk Time';
-  }
-}
 
 // Add talk time to the timer
-function addTalkTime(seconds) {
-  timeRemaining += seconds;
-  const m = Math.floor(timeRemaining / 60);
-  const s = timeRemaining % 60;
-  if (timerDisplay) {
-    timerDisplay.textContent = `${m}:${s < 10 ? '0'+s : s}`;
-  }
-  // Hide buy button after adding time
-  if (buyTalkTimeBtn && timeRemaining > 60) {
-    buyTalkTimeBtn.style.display = 'none';
-  }
-}
+
 
 // [PRODUCTION FIX] Connection Health Monitoring
 function startConnectionHealthCheck() {
   stopConnectionHealthCheck(); // Clear any existing check
-  
+
   connectionHealthCheck = setInterval(() => {
     if (!sessionActive || !conversation) {
       stopConnectionHealthCheck();
       return;
     }
-    
+
     // Check if connection is still alive
     try {
       // Simple check - if we haven't received any updates in 30 seconds, something might be wrong
       const timeSinceLastConnection = lastConnectionTime ? Date.now() - lastConnectionTime : 0;
-      
+
       if (timeSinceLastConnection > 30000 && lastConnectionTime) {
         console.warn('⚠️ No connection activity for 30+ seconds');
         // Don't disconnect, just log - the SDK will handle reconnection
@@ -2038,10 +1931,18 @@ function stopConnectionHealthCheck() {
 
 async function endSession() {
   if (!sessionActive && !conversation && !isSessionPaused) return;
+
+  // Notify server that session is ending
+  try {
+    await authenticatedFetch('/api/session/end', { method: 'POST' });
+  } catch (e) {
+    console.warn("Failed to notify server of session end:", e);
+  }
+
   sessionActive = false;
   isSessionPaused = false;
   isReconnecting = false;
-  
+
   // [PRODUCTION FIX] Clean up all connection-related timers
   stopConnectionHealthCheck();
   if (disconnectRetryTimeout) {
@@ -2049,7 +1950,7 @@ async function endSession() {
     disconnectRetryTimeout = null;
   }
   disconnectRetryCount = 0;
-  
+
   // Clean up sync timers
   if (speakTimeout) {
     clearTimeout(speakTimeout);
@@ -2059,13 +1960,13 @@ async function endSession() {
     clearTimeout(silenceTimeout);
     silenceTimeout = null;
   }
-  
+
   initialTalktime = 0; // Reset initial talktime
   sessionStorage.removeItem('initialTalktime'); // Clear stored initial
   if (timerInterval) clearInterval(timerInterval);
   stopTalkTimeTracking(); // Stop tracking talk time
   hidePaymentModal(); // Hide payment modal if open
-  
+
   // Reset connection status indicator
   const connectionStatus = document.getElementById('connectionStatus');
   if (connectionStatus) {
@@ -2075,26 +1976,26 @@ async function endSession() {
       statusText.textContent = 'Disconnected';
     }
   }
-  
+
   // Clear mute state interval
   if (window.micMuteInterval) {
     clearInterval(window.micMuteInterval);
     window.micMuteInterval = null;
   }
-  
+
   // Reset mic button state
   isMicMuted = false;
   updateMicButtonState(false);
-  
+
   // Stop and clear media stream
   if (userMediaStream) {
     userMediaStream.getTracks().forEach(track => track.stop());
     userMediaStream = null;
   }
-  
+
   // Hide status text
   toggleVoiceVisuals('idle');
-  
+
   // Show side panel again when call ends
   const sidePanel = document.getElementById('sidePanel');
   const sidePanelToggle = document.getElementById('sidePanelToggle');
@@ -2110,9 +2011,9 @@ async function endSession() {
       sidePanelToggle.classList.remove('call-hidden');
     }
   }
-  
+
   updateStatus('Disconnected', 'default');
-  
+
   if (conversation) {
     try {
       await conversation.endSession();
@@ -2125,7 +2026,7 @@ async function endSession() {
   // [CRITICAL] Save Transcript / Send Email
   const emailInput = document.getElementById('userEmail');
   const email = emailInput ? emailInput.value?.trim() : '';
-  
+
   if (userTranscript) {
     try {
       updateStatus('Saving session and generating care plan...', 'default');
@@ -2134,7 +2035,7 @@ async function endSession() {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({ transcript: userTranscript })
       });
-      
+
       if (response.ok) {
         console.log('✅ Session saved and care plan generation initiated');
       } else {
@@ -2156,14 +2057,14 @@ async function endSession() {
 
   // Show success message about care plan email
   alert("Call ended! Your personalized care plan is being sent to your email. Please check your inbox in a few minutes.");
-  
+
   // Redirect back to Ronit start page after a delay
   setTimeout(() => {
     if (screens.call) screens.call.classList.add('hidden');
     if (screens.ronitStart) {
       screens.ronitStart.classList.remove('hidden');
       if (footer) footer.style.display = 'block';
-      
+
       // Show side panel again
       const sidePanel = document.getElementById('sidePanel');
       const sidePanelToggle = document.getElementById('sidePanelToggle');
@@ -2213,20 +2114,20 @@ function toggleVoiceVisuals(state) {
     // 🟢 AGENT SPEAKING (Green)
     callStatus.textContent = "Agent is speaking...";
     callStatus.className = 'call-status-text speaking'; // Reset classes, add speaking
-    
+
     if (profileContainer) profileContainer.classList.add('speaking');
 
   } else if (state === 'listening') {
     // ⚪ LISTENING (Gray)
     // Handle Mute Logic
     if (typeof isMicMuted !== 'undefined' && isMicMuted) {
-       callStatus.textContent = "🔇 Muted";
-       callStatus.className = 'call-status-text'; // Gray
+      callStatus.textContent = "🔇 Muted";
+      callStatus.className = 'call-status-text'; // Gray
     } else {
-       callStatus.textContent = "Listening...";
-       callStatus.className = 'call-status-text'; // Gray
+      callStatus.textContent = "Listening...";
+      callStatus.className = 'call-status-text'; // Gray
     }
-    
+
     if (profileContainer) profileContainer.classList.remove('speaking');
 
   } else {

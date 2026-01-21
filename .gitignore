@@ -13,3 +13,5 @@ __pycache__/
 data/
 *.db
 *.sqlite3
+redis-server/
+redis-server/

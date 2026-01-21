@@ -24,3 +24,5 @@ python-dotenv
 requests
 supabase
 gunicorn
+# Markdown to HTML conversion for email templates
+markdown

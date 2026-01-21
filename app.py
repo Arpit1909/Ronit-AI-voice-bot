@@ -9,6 +9,7 @@ import os
 import re
 import random
 import threading
+from threading import Lock
 import time
 import uuid
 import smtplib
@@ -19,6 +20,7 @@ import logging
 import hmac
 import hashlib
 from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Tuple, List, Dict, Any
@@ -37,10 +39,12 @@ import jwt
 from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
 
+import redis
+# from flask_socketio import SocketIO, emit # Removed: Not needed for REST API
+
 # Load environment variables
 load_dotenv()
 
-# ===== Logging Configuration =====
 logging.basicConfig(
     level=logging.INFO if os.getenv("LOG_LEVEL", "INFO").upper() == "INFO" else logging.DEBUG,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -48,85 +52,76 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# ===== Configuration =====
 class Config:
     """Application configuration from environment variables."""
     
-    # Core ElevenLabs Configuration
     ELEVEN_API_KEY = (os.getenv("ELEVEN_API_KEY") or "").strip()
     AGENT_ID = (os.getenv("AGENT_ID") or os.getenv("ELEVEN_AGENT_ID") or "").strip()
     PORT = int(os.getenv("PORT", "5000"))
     
-    # Email Configuration (Mailjet)
     MAILJET_API_KEY = (os.getenv("MAILJET_API_KEY") or "").strip()
     MAILJET_API_SECRET = (os.getenv("MAILJET_API_SECRET") or "").strip()
     FROM_EMAIL = (os.getenv("FROM_EMAIL") or "info@example.com").strip()
     FROM_NAME = (os.getenv("FROM_NAME") or "AI Voice Coach").strip()
     REPLY_TO = (os.getenv("REPLY_TO") or "").strip()
     
-    # SMTP Fallback Configuration
     SMTP_HOST = (os.getenv("SMTP_HOST") or "").strip()
     SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
     SMTP_USER = (os.getenv("SMTP_USER") or "").strip()
     SMTP_PASSWORD = (os.getenv("SMTP_PASSWORD") or "").strip()
     SMTP_TLS = (os.getenv("SMTP_TLS", "true").lower() == "true")
     
-    # Gemini AI Configuration
     GEMINI_API_KEY = (os.getenv("GEMINI_API_KEY") or "").strip()
     GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash").strip()
     
-    # Razorpay Payment Configuration
     RAZORPAY_KEY_ID = (os.getenv("RAZORPAY_KEY_ID") or "").strip()
     RAZORPAY_KEY_SECRET = (os.getenv("RAZORPAY_KEY_SECRET") or "").strip()
     RAZORPAY_CURRENCY = (os.getenv("RAZORPAY_CURRENCY") or "INR").strip()
-    # Parse RAZORPAY_AMOUNT_PAISA safely, handling invalid formats
+    
     try:
         amount_str = os.getenv("RAZORPAY_AMOUNT_PAISA", "49900").strip()
-        # Remove any non-numeric characters (like '/-', '₹', etc.)
         amount_str = re.sub(r'[^\d]', '', amount_str)
         RAZORPAY_AMOUNT_PAISA = int(amount_str) if amount_str else 49900
     except (ValueError, AttributeError):
         logger.warning("Invalid RAZORPAY_AMOUNT_PAISA format, using default 49900")
         RAZORPAY_AMOUNT_PAISA = 49900
     
-    # Application Settings
     DEBUG = (os.getenv("DEBUG", "false").lower() == "true")
     ENVIRONMENT = os.getenv("ENVIRONMENT", "production").lower()
     MAX_TRANSCRIPT_LENGTH = int(os.getenv("MAX_TRANSCRIPT_LENGTH", "50000"))
     MAX_EMAIL_LENGTH = int(os.getenv("MAX_EMAIL_LENGTH", "254"))
     
-    # Admin Configuration
     ADMIN_PASSWORD = (os.getenv("ADMIN_PASSWORD") or "admin123").strip()
     ADMIN_USERNAME = (os.getenv("ADMIN_USERNAME") or "admin").strip()
     
-    # Google OAuth Configuration
     GOOGLE_CLIENT_ID = (os.getenv("GOOGLE_CLIENT_ID") or "").strip()
     
-    # JWT Configuration
-    JWT_SECRET_KEY = (os.getenv("JWT_SECRET_KEY") or os.getenv("SECRET_KEY") or os.urandom(32).hex()).strip()
+    JWT_SECRET_KEY = (os.getenv("JWT_SECRET_KEY") or os.getenv("SECRET_KEY")).strip() if (os.getenv("JWT_SECRET_KEY") or os.getenv("SECRET_KEY")) else None
+    
+    if not JWT_SECRET_KEY:
+        if ENVIRONMENT == "production":
+            raise ValueError("FATAL: JWT_SECRET_KEY must be set in production!")
+        else:
+            JWT_SECRET_KEY = os.urandom(32).hex()
+            
     JWT_ALGORITHM = "HS256"
     JWT_EXPIRATION_HOURS = 24
     
-    # Supabase Configuration
     SUPABASE_URL = (os.getenv("SUPABASE_URL") or "").strip()
     SUPABASE_KEY = (os.getenv("SUPABASE_KEY") or os.getenv("SUPABASE_SERVICE_ROLE_KEY") or "").strip()
 
-# ===== Paths and Directories =====
 ROOT_DIR = Path(__file__).parent
 PUBLIC_DIR = ROOT_DIR / "public"
 DATA_DIR = ROOT_DIR / "data"
 PUBLIC_DIR.mkdir(exist_ok=True)
 DATA_DIR.mkdir(exist_ok=True)
 
-# ===== Flask Application Setup =====
 app = Flask(__name__, static_url_path="", static_folder=str(PUBLIC_DIR))
 app.config['SECRET_KEY'] = os.getenv("SECRET_KEY", os.urandom(32).hex())
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max upload
 
-# Add ProxyFix middleware to trust headers from Caddy (1 proxy layer)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
-# ===== Supabase Client Initialization =====
 supabase: Optional[Client] = None
 if Config.SUPABASE_URL and Config.SUPABASE_KEY:
     try:
@@ -135,8 +130,16 @@ if Config.SUPABASE_URL and Config.SUPABASE_KEY:
     except Exception as e:
         logger.error(f"❌ Failed to initialize Supabase client: {e}")
         raise RuntimeError("Supabase connection is required. Application cannot start without database connection.")
-else:
-    raise RuntimeError("Supabase credentials not configured. SUPABASE_URL and SUPABASE_KEY are required.")
+
+# ===== Redis Configuration =====
+# MANDATORY: Redis for Session Persistence
+try:
+    redis_client = redis.from_url(os.getenv("REDIS_URL", "redis://localhost:6379/0"))
+    redis_client.ping()
+    logger.info("✅ Redis Connected Successfully")
+except Exception as e:
+    logger.critical(f"❌ Redis connection failed: {e}. FATAL ERROR: Cannot start without Redis.")
+    raise RuntimeError("Redis connection is required for production.")
 
 # ===== Security Headers =====
 @app.after_request
@@ -196,7 +199,130 @@ session.mount("http://", HTTPAdapter(max_retries=retries))
 _TOKEN_CACHE: Tuple[Optional[str], datetime] = (None, datetime.min)
 TOKEN_CACHE_TTL = timedelta(seconds=55)
 
-# ===== Validation Utilities =====
+# ==========================================
+# GOD LEVEL IN-MEMORY SESSION MANAGER
+# ==========================================
+
+SESSION_TTL = 3600  # Session expires after 1 hour of inactivity
+
+# 3. REDIS SESSION MANAGER
+# No in-memory fallback allowed.
+
+# [STRICT MODE] Helper to Flush Pending Time
+def flush_pending_time(email):
+    """Calculates and deducts any time pending in Redis before checking DB."""
+    try:
+        raw = redis_client.get(f"session:{email}")
+        if raw:
+            session_data = json.loads(raw)
+            # Flush means we are syncing/ending, so we remove the session key
+            redis_client.delete(f"session:{email}")
+            
+            last_hb_str = session_data.get("last_heartbeat", session_data.get("last_seen"))
+            last_heartbeat = datetime.fromisoformat(last_hb_str)
+            if last_heartbeat.tzinfo is None:
+                last_heartbeat = last_heartbeat.replace(tzinfo=timezone.utc)
+                
+            now = datetime.now(timezone.utc)
+            delta_seconds = (now - last_heartbeat).total_seconds()
+            
+            # Sanity check
+            if delta_seconds > 15: delta_seconds = 15
+            if delta_seconds < 0: delta_seconds = 0
+            
+            if delta_seconds > 0:
+                # Deduct immediately
+                user = get_user(email)
+                current = float(user.get("talktime", 0))
+                new_bal = max(0, current - delta_seconds)
+                update_user(email, {"talktime": new_bal})
+    except Exception as e:
+        logger.error(f"Failed to flush pending time for {email}: {e}")
+
+def check_and_refill_community_bonus(email: str) -> bool:
+    """
+    Checks if a Community Member is due for their monthly 15-minute refill.
+    Returns True if refilled, False otherwise.
+    """
+    try:
+        response = supabase.table("users").select("*").eq("email", email).execute()
+        if not response.data:
+            return False
+            
+        user = response.data[0]
+        if not user.get("is_community_member"):
+            return False
+
+        last_refill_str = user.get("last_community_refill")
+        should_refill = False
+        now = datetime.now(timezone.utc)
+
+        if not last_refill_str:
+            should_refill = True
+        else:
+            try:
+                if last_refill_str.endswith('Z'):
+                    last_refill = datetime.fromisoformat(last_refill_str.replace('Z', '+00:00'))
+                else:
+                    last_refill = datetime.fromisoformat(last_refill_str)
+                
+                if last_refill.tzinfo is None:
+                    last_refill = last_refill.replace(tzinfo=timezone.utc)
+                
+                if (now - last_refill).days >= 30:
+                    should_refill = True
+            except Exception as e:
+                logger.error(f"Date parse error for community refill: {e}")
+                should_refill = True
+
+        if should_refill:
+            try:
+                current_talktime = int(user.get("talktime", 0))
+                new_talktime = current_talktime + 900
+                
+                supabase.table("users").update({
+                    "talktime": new_talktime,
+                    "last_community_refill": now.isoformat()
+                }).eq("email", email).execute()
+                
+                logger.info(f"💎 Community Bonus: Added 15 mins to {email}")
+                return True
+            except Exception as e:
+                logger.error(f"Failed to apply community bonus: {e}")
+                
+        return False
+    except Exception as e:
+        logger.error(f"Error in community refill: {e}")
+        return False
+
+
+
+# [ADD HELPER FUNCTION FOR TRANSACTIONS]
+def is_transaction_processed(order_id: str) -> bool:
+    """Check if a payment order ID has already been processed."""
+    if not supabase: return False
+    # Create a 'transactions' table in Supabase if you haven't yet!
+    # Schema: id (uuid), order_id (text, unique), email (text), amount (int), created_at (timestamp)
+    try:
+        res = supabase.table("transactions").select("id").eq("order_id", order_id).execute()
+        return len(res.data) > 0
+    except Exception:
+        return False
+
+def record_transaction(email: str, order_id: str, amount: int):
+    """Record a processed transaction."""
+    if not supabase: return
+    try:
+        supabase.table("transactions").insert({
+            "order_id": order_id,
+            "email": email,
+            "amount": amount,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }).execute()
+    except Exception as e:
+        logger.error(f"Failed to record transaction: {e}")
+
+
 def validate_email(email: str) -> bool:
     """Validate email address format."""
     if not email or len(email) > Config.MAX_EMAIL_LENGTH:
@@ -223,7 +349,6 @@ def validate_blueprint_id(blueprint_id: str) -> bool:
     pattern = r'^[a-zA-Z0-9_-]+$'
     return bool(re.match(pattern, blueprint_id)) and len(blueprint_id) <= 100
 
-# ===== Error Handling =====
 class AppError(Exception):
     """Base application error."""
     def __init__(self, message: str, status_code: int = 500, details: Optional[Dict] = None):
@@ -256,7 +381,6 @@ def handle_internal_error(error):
         "message": "An unexpected error occurred"
     }), 500
 
-# ===== ElevenLabs Token Management =====
 def _extract_token(payload: dict) -> Optional[str]:
     """Extract token from various response formats."""
     for key in ("token", "access_token", "conversation_token"):
@@ -360,7 +484,6 @@ def _get_eleven_token() -> str:
     logger.error("All token endpoints failed", extra={"attempts": tried})
     raise AppError("Failed to retrieve token from ElevenLabs", status_code=502, details={"attempts": tried})
 
-# ===== JWT Authentication =====
 def create_token(email: str) -> str:
     """Create a JWT token for the user with 24-hour expiration."""
     payload = {
@@ -403,7 +526,6 @@ def token_required(f):
     
     return decorated_function
 
-# ===== User Data Storage (Supabase Only - No JSON Fallback) =====
 def load_users() -> Dict[str, Any]:
     """Load all users from Supabase. Raises error if Supabase is not available."""
     if not supabase:
@@ -590,15 +712,19 @@ def load_blueprint_from_disk(blueprint_id: str) -> Optional[Dict[str, Any]]:
         logger.exception(f"Failed to load blueprint {blueprint_id} from Supabase: {e}")
         raise AppError("Database error: Failed to load blueprint", status_code=500)
 
-# ===== Email Functions =====
-def _send_email(to_email: str, subject: str, body: str) -> bool:
+# ==========================================
+# GOD LEVEL SMTP EMAIL SYSTEM (HTML Support)
+# ==========================================
+
+def _send_email(to_email: str, subject: str, html_body: str) -> bool:
     """
-    Send email using Mailjet API, with SMTP fallback.
+    Send beautiful HTML email using ONLY SMTP.
+    Removes dependency on Mailjet or other providers.
     
     Args:
         to_email: Recipient email address
         subject: Email subject
-        body: Email body (plain text)
+        html_body: Email body (HTML format)
     
     Returns:
         True if email was sent successfully, False otherwise
@@ -608,109 +734,115 @@ def _send_email(to_email: str, subject: str, body: str) -> bool:
         logger.error(f"Invalid email address: {to_email}")
         return False
     
-    # Try Mailjet first
-    if Config.MAILJET_API_KEY and Config.MAILJET_API_SECRET:
-        payload = {
-            "Messages": [{
-                "From": {
-                    "Email": Config.FROM_EMAIL,
-                    "Name": Config.FROM_NAME
-                },
-                "To": [{
-                    "Email": to_email
-                }],
-                "Subject": subject,
-                "TextPart": body,
-                **({"ReplyTo": {"Email": Config.REPLY_TO}} if Config.REPLY_TO else {})
-            }]
-        }
-        
-        auth_string = f"{Config.MAILJET_API_KEY}:{Config.MAILJET_API_SECRET}"
-        auth_b64 = base64.b64encode(auth_string.encode('ascii')).decode('ascii')
-        
-        try:
-            r = session.post(
-                "https://api.mailjet.com/v3.1/send",
-                headers={
-                    "Authorization": f"Basic {auth_b64}",
-                    "Content-Type": "application/json"
-                },
-                json=payload,
-                timeout=30
-            )
-            
-            if r.status_code in (200, 201):
-                logger.info(f"Email sent via Mailjet to {to_email}")
-                return True
-            
-            logger.error(f"Mailjet error: {r.status_code} {r.text[:300]}")
-        except Exception as e:
-            logger.exception(f"Mailjet request failed: {e}")
+    # Check Configuration
+    if not (Config.SMTP_HOST and Config.SMTP_USER and Config.SMTP_PASSWORD):
+        logger.error("❌ SMTP not configured. Cannot send email.")
+        return False
 
-    # Try SMTP fallback
-    if Config.SMTP_HOST and Config.SMTP_USER and Config.SMTP_PASSWORD:
-        try:
-            msg = MIMEText(body, "plain", "utf-8")
-            msg["Subject"] = subject
-            msg["From"] = f"{Config.FROM_NAME} <{Config.FROM_EMAIL}>"
-            msg["To"] = to_email
-            if Config.REPLY_TO:
-                msg["Reply-To"] = Config.REPLY_TO
-
-            if Config.SMTP_TLS:
-                context = ssl.create_default_context()
-                with smtplib.SMTP(Config.SMTP_HOST, Config.SMTP_PORT) as server:
-                    server.starttls(context=context)
-                    server.login(Config.SMTP_USER, Config.SMTP_PASSWORD)
-                    server.sendmail(Config.FROM_EMAIL, [to_email], msg.as_string())
-            else:
-                with smtplib.SMTP(Config.SMTP_HOST, Config.SMTP_PORT) as server:
-                    server.login(Config.SMTP_USER, Config.SMTP_PASSWORD)
-                    server.sendmail(Config.FROM_EMAIL, [to_email], msg.as_string())
-            
-            logger.info(f"Email sent via SMTP to {to_email}")
-            return True
-        except Exception as e:
-            logger.exception(f"SMTP send failed: {e}")
-            return False
-
-    logger.warning(f"No email provider configured. Would have sent to {to_email}")
-    return False
-
-def _delayed_email_with_link(email: str, link: str, delay_seconds: int):
-    """Send email with care plan link after delay."""
     try:
-        time.sleep(delay_seconds)
-        subject = "📋 Your Personalized Care Plan is Ready!"
-        body = f"""Hello!
+        # Create HTML Message
+        msg = MIMEMultipart('alternative')
+        msg["Subject"] = subject
+        msg["From"] = f"{Config.FROM_NAME} <{Config.FROM_EMAIL}>"
+        msg["To"] = to_email
+        if Config.REPLY_TO:
+            msg["Reply-To"] = Config.REPLY_TO
 
-Thank you for your coaching session with Ronit!
+        # Attach HTML Body
+        msg.attach(MIMEText(html_body, "html", "utf-8"))
 
-Your personalized care plan has been created based on our conversation. This comprehensive plan includes:
-• Key insights and patterns from our discussion
-• Personalized recommendations tailored to your needs
-• Specific, actionable next steps
-• Resources and strategies to support your journey
+        # Connect and Send
+        context = ssl.create_default_context()
+        if Config.SMTP_TLS:
+            with smtplib.SMTP(Config.SMTP_HOST, Config.SMTP_PORT) as server:
+                server.starttls(context=context)
+                server.login(Config.SMTP_USER, Config.SMTP_PASSWORD)
+                server.send_message(msg)
+        else:
+            # SSL Connection (Port 465 usually)
+            with smtplib.SMTP_SSL(Config.SMTP_HOST, Config.SMTP_PORT, context=context) as server:
+                server.login(Config.SMTP_USER, Config.SMTP_PASSWORD)
+                server.send_message(msg)
+        
+        logger.info(f"✅ HTML Email sent via SMTP to {to_email}")
+        return True
 
-View your care plan here:
-{link}
+    except Exception as e:
+        logger.exception(f"❌ SMTP send failed: {e}")
+        return False
 
-This link will remain active for your reference.
+def _delayed_email_with_link(email: str, link: str, care_plan_content: str, delay_seconds: int):
+    """
+    Sends an attractive HTML email WITH the Gemini Care Plan summary.
+    """
+    try:
+        if delay_seconds > 0:
+            time.sleep(delay_seconds)
+            
+        subject = "🌟 Your Personal Care Plan from Ronit"
+        
+        # Convert Markdown to HTML for the email body
+        # If you don't want to install 'markdown' lib, just wrap in <pre> tags
+        try:
+            import markdown
+            formatted_content = markdown.markdown(care_plan_content)
+        except ImportError:
+            # Fallback if markdown lib is missing
+            formatted_content = f"<pre style='font-family: sans-serif; white-space: pre-wrap;'>{care_plan_content}</pre>"
 
-We hope this care plan helps you on your journey to better health and wellness.
+        # Professional HTML Template with DYNAMIC CONTENT
+        html_body = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                body {{ font-family: 'Helvetica', 'Arial', sans-serif; background-color: #f4f4f4; margin: 0; padding: 0; }}
+                .container {{ max-width: 600px; margin: 20px auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }}
+                .header {{ background: #065F46; padding: 30px; text-align: center; color: white; }}
+                .header h1 {{ margin: 0; font-size: 24px; font-weight: 700; letter-spacing: 1px; }}
+                .content {{ padding: 40px 30px; color: #333333; line-height: 1.6; }}
+                .ai-summary {{ background-color: #f0fdf4; border-left: 4px solid #065F46; padding: 15px; margin: 20px 0; border-radius: 4px; }}
+                .btn {{ display: block; width: 200px; margin: 30px auto; padding: 15px 0; background: #065F46; color: white; text-align: center; text-decoration: none; border-radius: 50px; font-weight: bold; box-shadow: 0 4px 6px rgba(6, 95, 70, 0.2); }}
+                .btn:hover {{ background: #047857; }}
+                .footer {{ background: #f9fafb; padding: 20px; text-align: center; font-size: 12px; color: #9ca3af; }}
+                h2 {{ color: #065F46; font-size: 20px; margin-top: 0; }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h1>RONIT AI COACH</h1>
+                </div>
+                <div class="content">
+                    <h2>Your Care Plan is Ready</h2>
+                    <p>It was great speaking with you today. Based on our conversation, here is your personalized summary:</p>
+                    
+                    <div class="ai-summary">
+                        {formatted_content}
+                    </div>
 
-Best regards,
-Ronit AI Coach Team
-
----
-This is an automated message. Please do not reply to this email."""
-        ok = _send_email(email, subject, body)
+                    <a href="{link}" class="btn">View Full Blueprint</a>
+                    
+                    <p style="text-align: center; font-size: 14px; color: #666;">(Link is secure and private)</p>
+                </div>
+                <div class="footer">
+                    <p>&copy; 2025 Ronit AI Coach. All rights reserved.</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+        
+        ok = _send_email(email, subject, html_body)
+        
         if ok:
-            logger.info(f"Care plan email sent to {email}")
+            logger.info(f"Care plan email (with summary) sent to {email}")
         else:
             logger.error(f"Failed to send care plan email to {email}")
+            
     except Exception as e:
         logger.exception(f"Email thread error for {email}: {e}")
+
 
 # ===== Gemini AI Integration =====
 def _call_gemini_mindmap_blueprint(transcript: str) -> str:
@@ -927,69 +1059,161 @@ def login():
 @limiter.limit("50 per hour")
 @token_required
 def get_user_talktime(current_user_email: str):
-    """Get user talktime. Email is extracted from JWT token."""
+    """Get balance with AUTO-REFILL for Community Members."""
+    # 1. Flush pending Redis time
+    flush_pending_time(current_user_email)
+    
+    # 2. Check & Apply Monthly Community Refill
+    refilled = check_and_refill_community_bonus(current_user_email)
+    
+    # 3. Return Accurate Balance
     user = get_user(current_user_email)
     if user:
         return jsonify({
             "ok": True,
             "talktime": user.get("talktime", 0),
             "email": current_user_email,
+            "is_community_member": user.get("is_community_member", False),
             "is_new": False
         })
     else:
-        # User doesn't exist - they need to sign up first
         raise AppError("User not found. Please sign up first.", status_code=404)
 
-@app.post("/api/user/talktime")
-@limiter.limit("100 per hour")
+@app.post("/api/session/start")
+@limiter.limit("20 per minute")
 @token_required
-def sync_user_talktime(current_user_email: str):
-    """Sync user talktime from frontend. Email is extracted from JWT token."""
-    data = request.get_json(silent=True) or {}
-    talktime = int(data.get("talktime", 0))
+def start_secure_session(current_user_email: str):
+    """
+    The Check-In Desk.
+    User asks to speak. We check balance and start the server clock.
+    """
+    # 2. Check Balance
+    user = get_user(current_user_email)
+    if not user or int(user.get("talktime", 0)) <= 0:
+        return jsonify({"ok": False, "error": "Insufficient Funds"}), 402
+
+    # 3. Create Session
+    session_id = str(uuid.uuid4())[:8]
+    now_iso = datetime.now(timezone.utc).isoformat()
     
-    if talktime < 0:
-        raise AppError("Talktime cannot be negative", status_code=400)
+    # 4. Store in Redis (Persistence!)
+    session_data = {
+        "session_id": session_id,
+        "last_heartbeat": now_iso
+    }
     
-    set_user_talktime(current_user_email, talktime)
+    redis_client.setex(f"session:{current_user_email}", SESSION_TTL, json.dumps(session_data))
+    
+    logger.info(f"🚀 Session started: {current_user_email} (ID: {session_id})")
+    
+    # Also log to DB for audit
+    update_user(current_user_email, {
+        "last_active_heartbeat": now_iso,
+        "session_status": "active"
+    })
+    
     return jsonify({
         "ok": True,
-        "message": "Talktime synced",
-        "talktime": talktime
+        "session_id": session_id,
+        "remaining_seconds": int(user.get("talktime", 0))
     })
 
-@app.post("/api/user/deduct-time")
-@limiter.limit("100 per minute")  # Allow frequent updates
+@app.post("/api/session/heartbeat")
+@limiter.limit("120 per minute")
 @token_required
-def deduct_session_time(current_user_email: str):
-    """Securely deduct time during an active call (Heartbeat). Email is extracted from JWT token."""
-    data = request.get_json(silent=True) or {}
-    seconds_to_deduct = int(data.get("seconds", 5))  # Default to heartbeat interval
-        
-    user = get_user(current_user_email)
-    if not user:
-        raise AppError("User not found", status_code=404)
-        
-    current_balance = user.get("talktime", 0)
+def secure_heartbeat(current_user_email: str):
+    lock = redis_client.lock(f"lock:{current_user_email}", timeout=5)
     
-    # Check for exhaustion
-    if current_balance <= 0:
+    if not lock.acquire(blocking=False):
+        user = get_user(current_user_email)
         return jsonify({
-            "ok": False,
-            "status": "exhausted",
-            "message": "Talktime exhausted",
-            "remaining": 0
+            "ok": True,
+            "remaining_seconds": float(user.get("talktime", 0)),
+            "deducted": 0,
+            "note": "locked"
         })
-        
-    # Deduct time
-    new_balance = max(0, current_balance - seconds_to_deduct)
-    update_user(current_user_email, {"talktime": new_balance})
     
-    return jsonify({
-        "ok": True,
-        "status": "active",
-        "remaining": new_balance
-    })
+    try:
+        session_data = None
+        raw = redis_client.get(f"session:{current_user_email}")
+        if raw: session_data = json.loads(raw)
+
+        if not session_data:
+            return jsonify({"ok": False, "action": "terminate", "reason": "Session Invalid"}), 401
+
+        last_hb_str = session_data.get("last_heartbeat", session_data.get("last_seen"))
+        last_heartbeat = datetime.fromisoformat(last_hb_str)
+        
+        if last_heartbeat.tzinfo is None:
+            last_heartbeat = last_heartbeat.replace(tzinfo=timezone.utc)
+        
+        now = datetime.now(timezone.utc)
+        delta_seconds = (now - last_heartbeat).total_seconds()
+        
+        MAX_HEARTBEAT_GAP = 10.0
+        
+        if delta_seconds > MAX_HEARTBEAT_GAP:
+            logger.warning(f"Heartbeat timeout ({delta_seconds}s) for {current_user_email}. Terminating.")
+            
+            deduction = MAX_HEARTBEAT_GAP
+            user = get_user(current_user_email)
+            current_balance = float(user.get("talktime", 0))
+            new_balance = max(0, current_balance - deduction)
+            update_user(current_user_email, {"talktime": new_balance})
+            
+            redis_client.delete(f"session:{current_user_email}")
+                
+            return jsonify({
+                "ok": False, 
+                "action": "terminate", 
+                "reason": "Connection Unstable / Timeout",
+                "remaining_seconds": new_balance
+            })
+
+        if delta_seconds < 1.0:
+            return jsonify({
+                "ok": True,
+                "remaining_seconds": float(get_user(current_user_email).get("talktime", 0)),
+                "deducted": 0
+            })
+
+        if delta_seconds < 0: delta_seconds = 0
+
+        user = get_user(current_user_email)
+        current_balance = float(user.get("talktime", 0))
+        new_balance = max(0, current_balance - delta_seconds)
+
+        if new_balance <= 0:
+            redis_client.delete(f"session:{current_user_email}")
+
+            update_user(current_user_email, {"talktime": 0})
+            return jsonify({"ok": False, "action": "terminate", "remaining_seconds": 0})
+
+        update_user(current_user_email, {"talktime": new_balance})
+        
+        session_data["last_heartbeat"] = now.isoformat()
+        if "last_seen" in session_data: del session_data["last_seen"]
+        
+        redis_client.setex(f"session:{current_user_email}", SESSION_TTL, json.dumps(session_data))
+
+        return jsonify({
+            "ok": True,
+            "remaining_seconds": new_balance,
+            "deducted": delta_seconds
+        })
+    finally:
+        try:
+            lock.release()
+        except:
+            pass
+
+@app.post("/api/session/end")
+@token_required
+def end_secure_session(current_user_email: str):
+    """Ends session and charges for the final seconds."""
+    flush_pending_time(current_user_email) # Re-use the helper
+    return jsonify({"ok": True})
+
 
 @app.get("/health")
 def health_check():
@@ -1065,6 +1289,48 @@ def conversation_token():
         logger.exception("Unexpected error in conversation_token")
         raise AppError("Failed to retrieve conversation token", status_code=500)
 
+# [FIX 1] Clean Async Processing Helper
+def process_care_plan_background(app_context, transcript, current_user_email, session_id, blueprint_id, host_url):
+    """Background task with application context."""
+    # Note: In Flask 2.x+, we can pass the app object and use app.app_context()
+    # But since we are inside a request, we might want to capture the context properly.
+    # However, 'app' is global here.
+    with app.app_context(): 
+        try:
+            logger.info(f"Starting async care plan for {current_user_email}")
+            
+            # 1. Generate AI Plan
+            care_plan = _call_gemini_mindmap_blueprint(transcript)
+            
+            # 2. Update Database
+            blueprint_data = {
+                "content": care_plan,
+                "email": current_user_email,
+                "created": datetime.now(timezone.utc).isoformat(),
+                "session_id": session_id,
+                "transcript": transcript
+            }
+            save_blueprint_to_disk(blueprint_id, blueprint_data)
+            
+            # 3. Record Session
+            try:
+                record_user_session(current_user_email, {
+                    "session_id": session_id,
+                    "duration": len(transcript) // 100,
+                    "transcript_length": len(transcript)
+                })
+            except Exception as e:
+                logger.warning(f"Failed to record session in bg: {e}")
+            
+            # 4. Send Email
+            care_plan_link = f"{host_url.rstrip('/')}/blueprint/{blueprint_id}"
+            _delayed_email_with_link(current_user_email, care_plan_link, 0)
+            
+            logger.info(f"Background processing success: {blueprint_id}")
+            
+        except Exception as e:
+            logger.error(f"Background processing failed: {e}")
+
 @app.post("/upload-session")
 @limiter.limit("10 per hour")
 @token_required
@@ -1086,54 +1352,34 @@ def upload_session(current_user_email: str):
     session_id = str(uuid.uuid4())[:8]
     blueprint_id = f"{timestamp}_{session_id}"
     
-    # Generate care plan
+    # [TASK QUEUE]
+    # Insert task into Supabase for the background worker to pick up.
+    # This survives server restarts/crashes.
     try:
-        care_plan = _call_gemini_mindmap_blueprint(transcript)
+        supabase.table("tasks").insert({
+            "type": "generate_care_plan",
+            "payload": {
+                "email": current_user_email,
+                "transcript": transcript,
+                "session_id": session_id,
+                "blueprint_id": blueprint_id,
+                "host_url": request.host_url
+            },
+            "status": "pending",
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }).execute()
+        
+        logger.info(f"Task queued: {blueprint_id}")
+        
     except Exception as e:
-        logger.exception(f"Failed to generate care plan: {e}")
-        raise AppError("Failed to generate care plan", status_code=500)
-    
-    # Save blueprint with transcript to Supabase
-    blueprint_data = {
-        "content": care_plan,
-        "email": current_user_email,
-        "created": datetime.now(timezone.utc).isoformat(),
-        "session_id": session_id,
-        "transcript": transcript  # Include transcript in blueprint data for persistence
-    }
-    
-    try:
-        save_blueprint_to_disk(blueprint_id, blueprint_data)
-        logger.info(f"Blueprint and transcript saved to Supabase: {blueprint_id}")
-    except Exception as e:
-        logger.error(f"Failed to save blueprint: {blueprint_id}, error: {e}")
-        raise AppError("Failed to save care plan", status_code=500)
-    
-    # Record user session
-    try:
-        record_user_session(current_user_email, {
-            "session_id": session_id,
-            "duration": len(transcript) // 100,  # Rough estimate
-            "transcript_length": len(transcript)
-        })
-    except Exception as e:
-        logger.warning(f"Failed to record session for {current_user_email}: {e}")
-    
-    # Schedule email
-    care_plan_link = f"{request.host_url.rstrip('/')}/blueprint/{blueprint_id}"
-    delay_seconds = random.randint(10, 30)
-    
-    threading.Thread(
-        target=_delayed_email_with_link,
-        args=(current_user_email, care_plan_link, delay_seconds),
-        daemon=True,
-    ).start()
-    
-    logger.info(f"Session uploaded: {blueprint_id}, email scheduled in {delay_seconds}s")
+        logger.error(f"Failed to queue task for {current_user_email}: {e}")
+        # Consider a fallback or error response?
+        # For now, log it.
+        
     return jsonify({
         "ok": True,
-        "blueprint_id": blueprint_id,
-        "scheduled_in_seconds": delay_seconds
+        "message": "Processing queued",
+        "blueprint_id": blueprint_id
     })
 
 @app.get("/blueprint/<blueprint_id>")
@@ -1277,11 +1523,8 @@ def create_razorpay_order():
 @limiter.limit("20 per hour")
 @token_required
 def verify_razorpay_payment(current_user_email: str):
-    """Verify Razorpay payment and add talktime. Email is extracted from JWT token."""
     try:
         data = request.get_json(silent=True) or {}
-        
-        # Extract data
         razorpay_order_id = data.get("razorpay_order_id")
         razorpay_payment_id = data.get("razorpay_payment_id")
         razorpay_signature = data.get("razorpay_signature")
@@ -1289,7 +1532,12 @@ def verify_razorpay_payment(current_user_email: str):
         if not all([razorpay_order_id, razorpay_payment_id, razorpay_signature]):
             raise AppError("Missing payment details", status_code=400)
 
-        # Verify Signature
+        # 1. CHECK FOR REPLAY ATTACK
+        if is_transaction_processed(razorpay_order_id):
+            logger.warning(f"Replay attack attempt by {current_user_email} with order {razorpay_order_id}")
+            raise AppError("Transaction already processed", status_code=400)
+
+        # 2. Verify Signature
         msg = f"{razorpay_order_id}|{razorpay_payment_id}"
         generated_signature = hmac.new(
             Config.RAZORPAY_KEY_SECRET.encode('utf-8'),
@@ -1300,15 +1548,19 @@ def verify_razorpay_payment(current_user_email: str):
         if not hmac.compare_digest(generated_signature, razorpay_signature):
             raise AppError("Invalid payment signature", status_code=400)
 
-        # Add Talktime (100 credits)
-        add_talktime_to_user(current_user_email, 100)
-        user = get_user(current_user_email)
-        logger.info(f"Payment verified for {current_user_email}. New balance: {user.get('talktime')}")
-        return jsonify({
-            "ok": True, 
-            "message": "Payment verified", 
-            "new_talktime": user.get("talktime")
-        })
+        # 3. Add Talktime & Record Transaction (Atomic-ish)
+        # Using 100 credits as per your logic
+        if add_talktime_to_user(current_user_email, 100):
+            record_transaction(current_user_email, razorpay_order_id, 100)
+            
+            user = get_user(current_user_email)
+            return jsonify({
+                "ok": True, 
+                "message": "Payment verified", 
+                "new_talktime": user.get("talktime")
+            })
+        else:
+            raise AppError("Failed to update balance", status_code=500)
             
     except Exception as e:
         logger.exception("Payment verification failed")
@@ -1358,7 +1610,6 @@ def admin_login():
         raise AppError("Invalid username or password", status_code=401)
 
 def verify_admin_token():
-    """Verify admin authentication token."""
     auth_header = request.headers.get("Authorization", "")
     if not auth_header.startswith("Bearer "):
         raise AppError("Missing or invalid authorization header", status_code=401)
@@ -1366,12 +1617,71 @@ def verify_admin_token():
     token = auth_header.replace("Bearer ", "").strip()
     try:
         decoded = base64.b64decode(token).decode()
-        username, _ = decoded.split(":", 1)
-        if username == Config.ADMIN_USERNAME:
-            return True
+        # Expect format: username:iso_timestamp
+        username, timestamp_str = decoded.split(":", 1)
+        
+        if username != Config.ADMIN_USERNAME:
+            raise AppError("Invalid username", status_code=401)
+            
+        # Check Expiration (24 hours)
+        token_time = datetime.fromisoformat(timestamp_str)
+        if datetime.now(timezone.utc) - token_time > timedelta(hours=24):
+             raise AppError("Token expired", status_code=401)
+             
+        return True
     except Exception:
         pass
     raise AppError("Invalid or expired token", status_code=401)
+
+# ==========================================
+# ADMIN: COMMUNITY MEMBER MANAGEMENT
+# ==========================================
+
+@app.post("/api/admin/community/add")
+@limiter.limit("50 per hour")
+def add_community_member():
+    """Promote a user to Community Member."""
+    verify_admin_token()
+    data = request.get_json(silent=True) or {}
+    email = (data.get("email") or "").strip().lower()
+    
+    if not validate_email(email):
+        raise AppError("Invalid email", status_code=400)
+    
+    try:
+        response = supabase.table("users").select("*").eq("email", email).execute()
+        if not response.data:
+            raise AppError("User not found", status_code=404)
+        
+        supabase.table("users").update({
+            "is_community_member": True
+        }).eq("email", email).execute()
+        
+        return jsonify({"ok": True, "message": f"{email} is now a Community Member!"})
+    except AppError:
+        raise
+    except Exception as e:
+        logger.error(f"Error adding community member: {e}")
+        raise AppError("Database error", status_code=500)
+
+@app.post("/api/admin/community/remove")
+@limiter.limit("50 per hour")
+def remove_community_member():
+    """Remove community member status."""
+    verify_admin_token()
+    data = request.get_json(silent=True) or {}
+    email = (data.get("email") or "").strip().lower()
+    
+    try:
+        supabase.table("users").update({
+            "is_community_member": False,
+            "last_community_refill": None
+        }).eq("email", email).execute()
+        
+        return jsonify({"ok": True, "message": f"{email} removed from Community."})
+    except Exception as e:
+        logger.error(f"Error removing community member: {e}")
+        raise AppError("Database error", status_code=500)
 
 @app.get("/api/admin/users")
 @limiter.limit("100 per hour")
@@ -1425,13 +1735,14 @@ def get_all_users():
         users_list.append({
             "email": user_data.get("email", email),
             "talktime": user_data.get("talktime", 0),
+            "is_community_member": user_data.get("is_community_member", False),
             "created_at": user_data.get("created_at", "Unknown"),
             "last_login": last_login_str or "Never",
             "last_login_iso": last_login_str,
             "is_online": is_online,
             "total_sessions": user_data.get("total_sessions", 0),
             "total_duration": total_duration,
-            "sessions": sessions[-10:],  # Last 10 sessions
+            "sessions": sessions[-10:],
             "welcome_bonus_given": user_data.get("welcome_bonus_given", False),
             "welcome_bonus_date": user_data.get("welcome_bonus_date"),
             "updated_at": user_data.get("updated_at", "Unknown")
