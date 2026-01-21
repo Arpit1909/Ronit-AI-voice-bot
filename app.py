@@ -1147,6 +1147,9 @@ def secure_heartbeat(current_user_email: str):
             # Return 400 (not 401!) so frontend doesn't think auth failed
             return jsonify({"ok": False, "action": "restart", "reason": "Session not found in Redis"}), 400
 
+        # RENEW SESSION TTL - Reset timer to 1 hour on every heartbeat
+        redis_client.expire(f"session:{current_user_email}", SESSION_TTL)
+
         last_hb_str = session_data.get("last_heartbeat", session_data.get("last_seen"))
         last_heartbeat = datetime.fromisoformat(last_hb_str)
         
