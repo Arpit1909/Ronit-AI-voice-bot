@@ -1141,7 +1141,22 @@ async function startVoiceSession() {
     if (!cfgRes.ok) throw new Error('Failed to fetch configuration');
     const cfg = await cfgRes.json();
 
-    const tokenRes = await fetch('/conversation-token');
+    // ✅ NEW / SECURE CODE
+    const authToken = sessionStorage.getItem("authToken"); // Get the stored token
+    if (!authToken) {
+      console.error("No token found, user must login.");
+      // Optional: Redirect to login or just fail gracefully
+      throw new Error("Authentication required");
+    }
+
+    const tokenRes = await fetch("/conversation-token", {
+      method: "GET",
+      headers: {
+        "Authorization": "Bearer " + authToken,  // <--- The Key to the Gate
+        "Content-Type": "application/json"
+      }
+    });
+
     if (!tokenRes.ok) throw new Error('Token request failed');
     const tokenData = await tokenRes.json();
     const token = tokenData.token; // Extract token from response
@@ -1408,11 +1423,12 @@ function startTimer() {
   if (timerInterval) clearInterval(timerInterval);
   timerInterval = setInterval(() => {
     timeRemaining--;
-    timerDisplay.textContent = `${timeRemaining} s`;
+    // Show EXACT Total Seconds
+    timerDisplay.textContent = timeRemaining;
 
     // Update loading screen talk time if visible
     if (loadingTalkTimeValue && screens.loading && !screens.loading.classList.contains('hidden')) {
-      loadingTalkTimeValue.textContent = `${timeRemaining} s`;
+      loadingTalkTimeValue.textContent = timeRemaining;
     }
 
     // Show buy talk time button when less than 1 minute remaining
@@ -1513,13 +1529,13 @@ function stopTalkTimeTracking() {
 // Update talk time display
 function updateTalkTimeDisplay() {
   if (talkTimeValue) {
-    // Display total talk time in seconds
+    // Show EXACT Total Seconds
     talkTimeValue.textContent = totalTalkTime;
   }
 
   // Also update loading screen talk time if visible
   if (loadingTalkTimeValue && !screens.loading.classList.contains('hidden')) {
-    // Display time remaining in seconds
+    // Show EXACT Total Seconds
     loadingTalkTimeValue.textContent = timeRemaining;
   }
 
