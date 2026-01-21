@@ -1485,6 +1485,14 @@ function startTalkTimeTracking() {
         return;
       }
 
+      // Handle 400: Redis session missing - don't logout, just restart call
+      if (response.status === 400) {
+        console.warn("Redis session missing (400). Call will need to be restarted.");
+        // Don't logout! Just end the call gracefully
+        endSession();
+        return;
+      }
+
       const data = await response.json();
 
       if (data.action === 'terminate' || data.remaining_seconds <= 0) {

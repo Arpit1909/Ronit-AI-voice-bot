@@ -1144,7 +1144,8 @@ def secure_heartbeat(current_user_email: str):
         if raw: session_data = json.loads(raw)
 
         if not session_data:
-            return jsonify({"ok": False, "action": "terminate", "reason": "Session Invalid"}), 401
+            # Return 400 (not 401!) so frontend doesn't think auth failed
+            return jsonify({"ok": False, "action": "restart", "reason": "Session not found in Redis"}), 400
 
         last_hb_str = session_data.get("last_heartbeat", session_data.get("last_seen"))
         last_heartbeat = datetime.fromisoformat(last_hb_str)
