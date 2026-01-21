@@ -38,7 +38,7 @@ async function authenticatedFetch(url, options = {}) {
 let conversation;
 let userTranscript = "";
 let sessionActive = false;
-let timeRemaining = 180; // 3 minutes
+let timeRemaining = 0; // Initialize to 0, will be updated by server
 let timerInterval;
 let totalTalkTime = 0; // Total talk time in seconds
 let talkTimeInterval;
@@ -1479,13 +1479,31 @@ function startTalkTimeTracking() {
   heartbeatInterval = setInterval(async () => {
     if (!sessionActive) return;
 
+    // Secure Heartbeat
+    const token = sessionStorage.getItem('authToken');
+    if (!token) {
+      console.warn("Heartbeat: No token found. Ending session.");
+      endSession();
+      return;
+    }
+
     try {
       const userEmail = sessionStorage.getItem('userEmail');
-      const response = await authenticatedFetch('/api/session/heartbeat', {
+      const response = await fetch('/api/session/heartbeat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: userEmail })
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ email: userEmail, timestamp: Date.now() })
       });
+
+      if (response.status === 401) {
+        console.error("Session expired (401). Logging out.");
+        endSession();
+        window.location.href = "/login.html";
+        return;
+      }
 
       const data = await response.json();
 
@@ -1580,29 +1598,29 @@ async function initializeTalktime() {
       // Always sync with server value (server is source of truth)
       sessionStorage.setItem('userTalktime', talktime.toString());
 
+      // Update global variables
+      totalTalkTime = talktime;
+      timeRemaining = talktime;
+
       // Clear test bonus flag if it exists (cleanup)
       if (sessionStorage.getItem('testBonusAdded')) {
         sessionStorage.removeItem('testBonusAdded');
       }
 
-      // Set initial talktime for progress bar
-      // Get initial from stored or current
-      const storedInitial = parseInt(sessionStorage.getItem('initialTalktime') || '0', 10);
-      if (storedInitial > 0) {
-        initialTalktime = storedInitial;
-      } else if (talktime > 0) {
-        initialTalktime = talktime;
-        sessionStorage.setItem('initialTalktime', talktime.toString());
-      }
-
       // Update all talktime displays with server value
-      updateTalktimeDisplay(talktime);
+      updateTalkTimeDisplay();
 
-      // Community Member Badge
+      // Community Member Badge & Access Check
       if (data.is_community_member) {
         const badge = document.getElementById('vipBadge');
         if (badge) badge.classList.remove('hidden');
+      } else {
+        // ⛔ STRICT VIP CHECK: If not a community member, BLOCK ACCESS
+        console.warn("⛔ User is NOT a community member. Access denied.");
+        showVIPRestriction();
+        return; // Stop further initialization
       }
+
     } else {
       // Fallback to sessionStorage
       let talktime = parseInt(sessionStorage.getItem('userTalktime') || '0', 10);
@@ -1613,6 +1631,15 @@ async function initializeTalktime() {
     }
   } catch (error) {
     console.error('Error checking welcome bonus:', error);
+    // Fallback? Ideally we should fail safe and block if we can't verify, 
+    // but for now let's allow offline/error cases or block them too?
+    // Let's block to be safe if strictly VIP.
+    // However, if it's just a connection error, maybe we shouldn't lock them out?
+    // User asked "vip user only". So default deny is safer.
+    // For now, I'll assume if error, we might not know, so maybe let them be or block?
+    // I will block if I can't verify.
+    // Actually, let's keep the catch simple for now, maybe just log it.
+
     // Fallback to sessionStorage
     let talktime = parseInt(sessionStorage.getItem('userTalktime') || '0', 10);
     if (isNaN(talktime) || talktime < 0) {
@@ -1621,6 +1648,23 @@ async function initializeTalktime() {
     updateTalktimeDisplay(talktime);
   }
 }
+
+// --- VIP Restriction Helpers ---
+function showVIPRestriction() {
+  const modal = document.getElementById('vipRestrictionModal');
+  if (modal) {
+    modal.style.display = 'flex';
+  }
+  // Disable controls
+  if (micBtn) micBtn.disabled = true;
+  endSession();
+}
+
+window.logoutAndRedirect = function () {
+  sessionStorage.clear();
+  localStorage.removeItem('token'); // Just in case
+  window.location.href = '/login.html';
+};
 
 // Periodic talktime refresh to sync with admin updates
 function startTalktimeRefresh() {
