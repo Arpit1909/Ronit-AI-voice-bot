@@ -287,9 +287,22 @@
 
       <div id="loginError" class="error-message"></div>
 
-      <div class="google-signin-container">
-        <div id="google-signin-button"></div>
-      </div>
+      <!-- Manual Login Form (Restored for Local Testing) -->
+      <form id="manualLoginForm" class="login-form">
+        <div class="form-group">
+          <label for="email">Email Address</label>
+          <input type="email" id="email" name="email" required placeholder="name@example.com" autocomplete="email">
+        </div>
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input type="password" id="password" name="password" required placeholder="Enter your password"
+            autocomplete="current-password">
+        </div>
+
+        <button type="submit" class="btn-login">
+          Login
+        </button>
+      </form>
 
       <div class="signup-link">
         Don't have an account? <a href="/signup.html" id="signupLink">Sign Up</a>
@@ -305,121 +318,36 @@
     </p>
   </footer>
 
-  <script type="module">
-    let GOOGLE_CLIENT_ID = '';
+  <script>
+    // Manual Login Handler
+    document.getElementById('manualLoginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
 
-    // Fetch Google Client ID from backend
-    async function loadGoogleClientId() {
-      try {
-        const response = await fetch('/config');
-        const config = await response.json();
-        if (config.googleClientId && config.hasGoogleAuth) {
-          GOOGLE_CLIENT_ID = config.googleClientId;
-          console.log('Google Client ID loaded from backend');
-        } else {
-          console.warn('Google Client ID not configured. Please set GOOGLE_CLIENT_ID environment variable.');
-          // Hide Google button if not configured
-          const googleButton = document.getElementById('google-signin-button');
-          const divider = document.getElementById('dividerOr');
-          if (googleButton) {
-            googleButton.style.display = 'none';
-          }
-          if (divider) {
-            divider.style.display = 'none';
-          }
-        }
-      } catch (error) {
-        console.error('Error loading config:', error);
-      }
-    }
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value.trim();
+      const errorDiv = document.getElementById('loginError');
+      const submitBtn = e.target.querySelector('button[type="submit"]');
 
-    // Function to handle successful login (both email and Google)
-    async function handleSuccessfulLogin(userEmail, userName, userPicture = null, talktime = null) {
-      // Store user data in sessionStorage
-      sessionStorage.setItem('userEmail', userEmail);
-      sessionStorage.setItem('userName', userName);
-      if (userPicture) {
-        sessionStorage.setItem('userPicture', userPicture);
-      }
-      sessionStorage.setItem('isLoggedIn', 'true');
-
-      // Fetch user talktime if not provided
-      if (talktime === null) {
-        try {
-          const response = await fetch(`/api/user/talktime?email=${encodeURIComponent(userEmail)}`);
-          const data = await response.json();
-          if (data.ok) {
-            sessionStorage.setItem('userTalktime', data.talktime.toString());
-          }
-        } catch (error) {
-          console.warn('Failed to fetch talktime:', error);
-        }
-      } else {
-        sessionStorage.setItem('userTalktime', talktime.toString());
-      }
-
-      // Redirect to Ronit start call page
-      window.location.href = '/';
-    }
-
-    // Initialize Google Sign-In
-    function initializeGoogleSignIn() {
-      if (typeof google === 'undefined' || !google.accounts) {
-        console.warn('Google Identity Services not loaded. Please check your internet connection.');
+      // Basic validation
+      if (!email || !password) {
+        errorDiv.textContent = 'Please enter both email and password';
+        errorDiv.style.display = 'block';
         return;
       }
 
-      // Only initialize if we have a valid client ID
-      if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_ID.length > 0) {
-        google.accounts.id.initialize({
-          client_id: GOOGLE_CLIENT_ID,
-          callback: handleGoogleSignIn,
-          auto_select: false,
-          cancel_on_tap_outside: true
-        });
-
-        // Render the button with "Login" text
-        const buttonContainer = document.getElementById('google-signin-button');
-        if (buttonContainer) {
-          google.accounts.id.renderButton(buttonContainer, {
-            type: 'standard',
-            theme: 'outline',
-            size: 'large',
-            text: 'signin_with',  // Shows "Sign in with Google"
-            width: '100%',
-            locale: 'en'
-          });
-        }
-      } else {
-        // Hide Google button if client ID is not configured
-        const googleButton = document.getElementById('google-signin-button');
-        const divider = document.getElementById('dividerOr');
-        if (googleButton) {
-          googleButton.style.display = 'none';
-        }
-        if (divider) {
-          divider.style.display = 'none';
-        }
-      }
-    }
-
-    // Handle Google Sign-In callback
-    async function handleGoogleSignIn(response) {
       try {
-        // Send raw credential to backend for server-side verification
-        console.log('Sending Google credential to backend for verification...');
+        // Disable button during request
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Logging in...';
 
-        const res = await fetch('/api/auth/google', {
+        const res = await fetch('/api/auth/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            credential: response.credential  // Send raw credential, not decoded
-          })
+          body: JSON.stringify({ email, password })
         });
 
         const data = await res.json();
 
-        // Handle Success/Fail
         if (data.ok && data.token) {
           // Store app-generated JWT token
           sessionStorage.setItem('authToken', data.token);
@@ -427,41 +355,22 @@
           // Save user data to Session Storage
           sessionStorage.setItem('userEmail', data.email);
           sessionStorage.setItem('userName', data.name || data.email.split('@')[0]);
-          sessionStorage.setItem('userTalktime', data.talktime.toString());
+          sessionStorage.setItem('userTalktime', (data.talktime || 0).toString());
           sessionStorage.setItem('isLoggedIn', 'true');
 
-          // Redirect
+          // Redirect to Home
           window.location.href = '/';
         } else {
-          const errorDiv = document.getElementById('loginError');
-          errorDiv.textContent = data.message || 'Google login failed. Please try again.';
+          errorDiv.textContent = data.message || 'Login failed. Please check your credentials.';
           errorDiv.style.display = 'block';
-          setTimeout(() => {
-            errorDiv.style.display = 'none';
-          }, 5000);
         }
       } catch (error) {
-        console.error('Error processing Google Sign-In:', error);
-        const errorDiv = document.getElementById('loginError');
-        errorDiv.textContent = 'System error during login. Please try again.';
+        console.error('Login Error:', error);
+        errorDiv.textContent = 'Connection error. Please try again.';
         errorDiv.style.display = 'block';
-        setTimeout(() => {
-          errorDiv.style.display = 'none';
-        }, 5000);
-      }
-    }
-
-    // Wait for Google Identity Services to load
-    window.addEventListener('load', async () => {
-      // First load the Google Client ID from backend
-      await loadGoogleClientId();
-
-      // Then initialize Google Sign-In
-      if (typeof google !== 'undefined' && google.accounts) {
-        initializeGoogleSignIn();
-      } else {
-        // Wait a bit more for the script to load
-        setTimeout(initializeGoogleSignIn, 500);
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Login';
       }
     });
 
@@ -479,14 +388,6 @@
           errorDiv.style.display = 'none';
         }, 5000);
       }
-    });
-
-    // Manual login form removed - Google Sign-In only
-
-    // Sign up handler
-    document.getElementById('signupLink').addEventListener('click', (e) => {
-      e.preventDefault();
-      window.location.href = '/signup.html';
     });
   </script>
 </body>
