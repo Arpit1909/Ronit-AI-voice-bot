@@ -1926,6 +1926,37 @@ def reset_user_data(email: str):
         "message": message
     })
 
+@app.post("/api/admin/users/<email>/reset-talktime")
+@limiter.limit("50 per hour")
+def reset_talktime_endpoint(email: str):
+    """Instant reset of talktime to 0."""
+    verify_admin_token()
+    if not validate_email(email): raise AppError("Invalid email", status_code=400)
+    
+    set_user_talktime(email, 0)
+    return jsonify({"ok": True, "message": f"Talktime reset for {email}"})
+
+@app.post("/api/admin/users/<email>/toggle-vip")
+@limiter.limit("50 per hour")
+def toggle_vip_endpoint(email: str):
+    """Toggle VIP/Community Member status."""
+    verify_admin_token()
+    if not validate_email(email): raise AppError("Invalid email", status_code=400)
+    
+    user = get_user(email)
+    if not user: raise AppError("User not found", status_code=404)
+    
+    current_status = user.get("is_community_member", False)
+    new_status = not current_status
+    
+    update_user(email, {
+        "is_community_member": new_status,
+        "last_community_refill": None if not new_status else user.get("last_community_refill")
+    })
+    
+    status_msg = "Promoted to VIP" if new_status else "Removed from VIP"
+    return jsonify({"ok": True, "message": f"{email} {status_msg}", "is_vip": new_status})
+
 # ===== Application Startup =====
 @app.post("/api/auth/google")
 @limiter.limit("20 per hour")

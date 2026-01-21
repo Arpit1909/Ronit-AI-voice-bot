@@ -865,7 +865,17 @@
         
         <div style="display:flex; flex-direction:column; gap:0.5rem;">
            <button class="btn btn-primary" style="justify-content:center;" onclick="openTalktimeModal('${user.email}')">Add Talktime</button>
-           <button class="btn" style="justify-content:center; color:var(--danger); border-color:rgba(239,68,68,0.3);" onclick="deleteUser('${user.email}')">Delete User</button>
+           
+           <div style="display:flex; gap:0.5rem;">
+             <button class="btn" style="flex:1; justify-content:center; border-color:var(--warning); color:var(--warning);" onclick="resetTalkTime('${user.email}')">
+               <i class="fas fa-undo"></i> Reset Time
+             </button>
+             <button class="btn" style="flex:1; justify-content:center; border-color:${user.is_community_member ? 'var(--text-muted)' : 'var(--brand-primary)'}; color:${user.is_community_member ? 'var(--text-muted)' : 'var(--brand-primary)'};" onclick="toggleVIP('${user.email}')">
+               <i class="${user.is_community_member ? 'fas fa-user-minus' : 'fas fa-crown'}"></i> ${user.is_community_member ? 'Remove VIP' : 'Make VIP'}
+             </button>
+           </div>
+
+           <button class="btn" style="justify-content:center; color:var(--danger); border-color:rgba(239,68,68,0.3); margin-top:0.5rem;" onclick="deleteUser('${user.email}')">Delete User</button>
         </div>
       `;
     }
@@ -892,6 +902,32 @@
           body: JSON.stringify({ action: 'add', amount })
         });
         if ((await res.json()).ok) { showAlert('Balance updated.', 'success'); closeModal(); loadData(); }
+      } catch (e) { showAlert(e.message, 'error'); }
+    }
+
+    async function resetTalkTime(email) {
+      if (!confirm(`Are you SURE you want to RESET talk time for ${email} to 0?`)) return;
+      try {
+        const res = await fetch(`/api/admin/users/${encodeURIComponent(email)}/reset-talktime`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${adminToken}` }
+        });
+        if ((await res.json()).ok) { showAlert('Talk time reset to 0.', 'success'); closeModal(); loadData(); }
+      } catch (e) { showAlert(e.message, 'error'); }
+    }
+
+    async function toggleVIP(email) {
+      try {
+        const res = await fetch(`/api/admin/users/${encodeURIComponent(email)}/toggle-vip`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${adminToken}` }
+        });
+        const data = await res.json();
+        if (data.ok) {
+          showAlert(data.message, 'success');
+          closeModal();
+          loadData();
+        }
       } catch (e) { showAlert(e.message, 'error'); }
     }
 

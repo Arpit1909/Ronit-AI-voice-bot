@@ -1269,7 +1269,6 @@ async function startVoiceSession() {
         updateStatus('Connected', 'default');
         setTimeout(() => { toggleVoiceVisuals('listening'); }, 100);
 
-        startTimer();
         startTalkTimeTracking();
 
         console.log('✅ Session connected successfully');
@@ -1426,36 +1425,7 @@ function formatTime(seconds) {
   return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
 }
 
-function startTimer() {
-  if (timerInterval) clearInterval(timerInterval);
-  timerInterval = setInterval(() => {
-    timeRemaining--;
-    // Show Mins:Secs
-    timerDisplay.textContent = formatTime(timeRemaining);
-
-    // Update loading screen talk time if visible
-    if (loadingTalkTimeValue && screens.loading && !screens.loading.classList.contains('hidden')) {
-      loadingTalkTimeValue.textContent = formatTime(timeRemaining);
-    }
-
-    // Show buy talk time button when less than 1 minute remaining
-    if (timeRemaining <= 60 && buyTalkTimeBtn) {
-      buyTalkTimeBtn.style.display = 'block';
-    }
-
-    if (timeRemaining <= 0) {
-      // Show buy button prominently when time is up
-      if (buyTalkTimeBtn) {
-        buyTalkTimeBtn.style.display = 'block';
-        buyTalkTimeBtn.textContent = '⏱️ Buy Talk Time to Continue';
-      }
-      // Don't end session immediately, let user buy more time
-      if (timeRemaining < -10) {
-        endSession();
-      }
-    }
-  }, 1000);
-}
+// function startTimer() { ... } // Removed in favor of startTalkTimeTracking
 
 // Start tracking total talk time - GOD LEVEL IMPLEMENTATION
 // GOD LEVEL FRONTEND LOGIC
@@ -1479,6 +1449,8 @@ function startTalkTimeTracking() {
     if (currentDisplay > 0 && sessionActive) {
       currentDisplay -= 1; // Visually deduct 1s
       updateTalktimeDisplay(currentDisplay);
+      // [FIX] Save the new local value to storage so next tick is consistent
+      sessionStorage.setItem('userTalktime', currentDisplay.toString());
     }
   }, 1000);
 
