@@ -1419,16 +1419,23 @@ function updateStatus(text, visualState) {
   }
 }
 
+// Helper to format time as MM:SS
+function formatTime(seconds) {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+}
+
 function startTimer() {
   if (timerInterval) clearInterval(timerInterval);
   timerInterval = setInterval(() => {
     timeRemaining--;
-    // Show EXACT Total Seconds
-    timerDisplay.textContent = timeRemaining;
+    // Show Mins:Secs
+    timerDisplay.textContent = formatTime(timeRemaining);
 
     // Update loading screen talk time if visible
     if (loadingTalkTimeValue && screens.loading && !screens.loading.classList.contains('hidden')) {
-      loadingTalkTimeValue.textContent = timeRemaining;
+      loadingTalkTimeValue.textContent = formatTime(timeRemaining);
     }
 
     // Show buy talk time button when less than 1 minute remaining
@@ -1547,14 +1554,14 @@ function stopTalkTimeTracking() {
 // Update talk time display
 function updateTalkTimeDisplay() {
   if (talkTimeValue) {
-    // Show EXACT Total Seconds
-    talkTimeValue.textContent = totalTalkTime;
+    // Show Mins:Secs
+    talkTimeValue.textContent = formatTime(totalTalkTime);
   }
 
   // Also update loading screen talk time if visible
   if (loadingTalkTimeValue && !screens.loading.classList.contains('hidden')) {
-    // Show EXACT Total Seconds
-    loadingTalkTimeValue.textContent = timeRemaining;
+    // Show Mins:Secs
+    loadingTalkTimeValue.textContent = formatTime(timeRemaining);
   }
 
   // Check if talktime is 0 during active session
