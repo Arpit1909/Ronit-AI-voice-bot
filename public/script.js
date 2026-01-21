@@ -269,8 +269,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const sidePanelTalktimeValueEl = document.getElementById('sidePanelTalktimeValue');
   if (sidePanelTalktimeValueEl) {
     const talktime = parseInt(sessionStorage.getItem('userTalktime') || '0', 10);
-    const minutes = Math.floor(talktime / 60);
-    sidePanelTalktimeValueEl.textContent = minutes.toLocaleString();
+    sidePanelTalktimeValueEl.textContent = talktime.toLocaleString();
   }
 
   // Verify all elements exist
@@ -1409,15 +1408,11 @@ function startTimer() {
   if (timerInterval) clearInterval(timerInterval);
   timerInterval = setInterval(() => {
     timeRemaining--;
-    const m = Math.floor(timeRemaining / 60);
-    const s = timeRemaining % 60;
-    if (timerDisplay) {
-      timerDisplay.textContent = `${m}:${s < 10 ? '0' + s : s}`;
-    }
+    timerDisplay.textContent = `${timeRemaining} s`;
 
     // Update loading screen talk time if visible
     if (loadingTalkTimeValue && screens.loading && !screens.loading.classList.contains('hidden')) {
-      loadingTalkTimeValue.textContent = `${m}:${s < 10 ? '0' + s : s}`;
+      loadingTalkTimeValue.textContent = `${timeRemaining} s`;
     }
 
     // Show buy talk time button when less than 1 minute remaining
@@ -1699,8 +1694,7 @@ function updateTalktimeDisplay(talktime) {
   // Update side panel talktime (show in minutes)
   const sidePanelTalktimeValueEl = document.getElementById('sidePanelTalktimeValue');
   if (sidePanelTalktimeValueEl) {
-    const minutes = Math.floor(talktime / 60);
-    sidePanelTalktimeValueEl.textContent = minutes.toLocaleString();
+    sidePanelTalktimeValueEl.textContent = talktime.toLocaleString();
   }
   if (talktimeValue) talktimeValue.textContent = talktime.toLocaleString();
   if (loadingTalktimeValue) loadingTalktimeValue.textContent = talktime.toLocaleString();
@@ -2084,7 +2078,7 @@ async function endSession() {
     // Reset timer and status
     timeRemaining = 180;
     totalTalkTime = 0;
-    if (timerDisplay) timerDisplay.textContent = '03:00';
+    if (timerDisplay) timerDisplay.textContent = '180 s';
     if (talkTimeValue) talkTimeValue.textContent = '0';
     if (buyTalkTimeBtn) {
       buyTalkTimeBtn.style.display = 'none';

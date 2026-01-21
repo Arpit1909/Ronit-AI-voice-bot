@@ -883,6 +883,23 @@
           </div>
         </div>
 
+        <!-- Community Access Manager -->
+        <div class="users-section" style="margin-bottom: 24px;">
+          <div class="section-header">
+            <h2><i class="fas fa-crown"></i> Community Access Manager</h2>
+          </div>
+
+          <div style="display: flex; gap: 12px; align-items: flex-end; max-width: 600px;">
+            <div class="form-group" style="flex: 1; margin-bottom: 0;">
+              <label>Add VIP by Email:</label>
+              <input type="email" id="communityEmailInput" placeholder="user@example.com" style="width: 100%;">
+            </div>
+            <button class="btn btn-primary" onclick="quickAddCommunity()">
+              <i class="fas fa-plus-circle"></i> Promote to VIP
+            </button>
+          </div>
+        </div>
+
         <!-- Users Table Section -->
         <div class="users-section">
           <div class="section-header">
@@ -1786,6 +1803,35 @@
       if (autoRefreshInterval) {
         clearInterval(autoRefreshInterval);
         autoRefreshInterval = null;
+      }
+    }
+    async function quickAddCommunity() {
+      const emailInput = document.getElementById('communityEmailInput');
+      const email = emailInput.value.trim();
+
+      if (!email) {
+        showAlert('Please enter an email address', 'error');
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/admin/community/add', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminToken}` },
+          body: JSON.stringify({ email })
+        });
+
+        const data = await res.json();
+
+        if (data.ok) {
+          showAlert(data.message, 'success');
+          emailInput.value = ''; // Clear input
+          loadData(); // Refresh table to show the new crown icon
+        } else {
+          showAlert(data.message || 'Failed to add community member', 'error');
+        }
+      } catch (e) {
+        showAlert('Error: ' + e.message, 'error');
       }
     }
   </script>

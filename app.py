@@ -40,7 +40,7 @@ from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
 
 import redis
-# from flask_socketio import SocketIO, emit # Removed: Not needed for REST API
+
 
 # Load environment variables
 load_dotenv()
@@ -59,8 +59,7 @@ class Config:
     AGENT_ID = (os.getenv("AGENT_ID") or os.getenv("ELEVEN_AGENT_ID") or "").strip()
     PORT = int(os.getenv("PORT", "5000"))
     
-    MAILJET_API_KEY = (os.getenv("MAILJET_API_KEY") or "").strip()
-    MAILJET_API_SECRET = (os.getenv("MAILJET_API_SECRET") or "").strip()
+
     FROM_EMAIL = (os.getenv("FROM_EMAIL") or "info@example.com").strip()
     FROM_NAME = (os.getenv("FROM_NAME") or "AI Voice Coach").strip()
     REPLY_TO = (os.getenv("REPLY_TO") or "").strip()
@@ -1089,6 +1088,12 @@ def start_secure_session(current_user_email: str):
     """
     # 2. Check Balance
     user = get_user(current_user_email)
+
+    # [GATEKEEPER] Community Members Only
+    if not user.get("is_community_member"):
+        logger.warning(f"⛔ Non-community member {current_user_email} tried to access bot")
+        return jsonify({"ok": False, "error": "Access Restricted: You must be a Community Member to use Ronit."}), 403
+
     if not user or int(user.get("talktime", 0)) <= 0:
         return jsonify({"ok": False, "error": "Insufficient Funds"}), 402
 
@@ -2014,10 +2019,7 @@ if __name__ == "__main__":
     logger.info(f"  FROM_EMAIL: {Config.FROM_EMAIL}")
     logger.info(f"  FROM_NAME: {Config.FROM_NAME}")
     
-    if Config.MAILJET_API_KEY and Config.MAILJET_API_SECRET:
-        logger.info("  Mailjet: Configured")
-    else:
-        logger.warning("  Mailjet: Not configured")
+
     
     if Config.SMTP_HOST:
         logger.info(f"  SMTP: {Config.SMTP_HOST}:{Config.SMTP_PORT} (TLS: {Config.SMTP_TLS})")
