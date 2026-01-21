@@ -1575,6 +1575,8 @@ function updateTalkTimeDisplay() {
 
 // Initialize and update talktime display
 async function initializeTalktime() {
+  if (micBtn) micBtn.disabled = true; // [FIX] Disable start until verified
+
   // Get user email
   const emailInput = document.getElementById('userEmail');
   const email = emailInput ? emailInput.value?.trim() : sessionStorage.getItem('userEmail') || '';
@@ -1589,6 +1591,8 @@ async function initializeTalktime() {
       sessionStorage.setItem('userTalktime', '0');
     }
     updateTalktimeDisplay(talktime);
+    // Keep button disabled if 0? Or allow if we can't verify? 
+    // If no email, they can't have balance? Block.
     return;
   }
 
@@ -1621,6 +1625,15 @@ async function initializeTalktime() {
       if (data.is_community_member) {
         const badge = document.getElementById('vipBadge');
         if (badge) badge.classList.remove('hidden');
+
+        // [FIX] Enable button ONLY if VIP and has balance
+        if (talktime > 0 && micBtn) {
+          micBtn.disabled = false;
+        } else if (micBtn) {
+          console.warn("User has 0 balance.");
+          // Optional: update button text?
+        }
+
       } else {
         // ⛔ STRICT VIP CHECK: If not a community member, BLOCK ACCESS
         console.warn("⛔ User is NOT a community member. Access denied.");
@@ -2143,10 +2156,10 @@ async function endSession() {
       }
     }
     // Reset timer and status
-    timeRemaining = 180;
+    timeRemaining = 0; // [FIX] Reset to 0 (will need reload or re-sync for new session)
     totalTalkTime = 0;
-    if (timerDisplay) timerDisplay.textContent = '180 s';
-    if (talkTimeValue) talkTimeValue.textContent = '0';
+    if (timerDisplay) timerDisplay.textContent = formatTime(0); // [FIX] Show 00:00
+    if (talkTimeValue) talkTimeValue.textContent = formatTime(0);
     if (buyTalkTimeBtn) {
       buyTalkTimeBtn.style.display = 'none';
       buyTalkTimeBtn.disabled = false;
