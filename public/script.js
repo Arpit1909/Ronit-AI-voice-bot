@@ -1448,9 +1448,9 @@ function startTalkTimeTracking() {
 
     if (currentDisplay > 0 && sessionActive) {
       currentDisplay -= 1; // Visually deduct 1s
-      updateTalktimeDisplay(currentDisplay);
-      // [FIX] Save the new local value to storage so next tick is consistent
+      // Save FIRST so updateTalkTimeDisplay reads the correct value
       sessionStorage.setItem('userTalktime', currentDisplay.toString());
+      updateTalkTimeDisplay(); // Update all displays
       if (currentDisplay % 10 === 0) console.log(`⏱️ Time remaining: ${currentDisplay}s`);
     }
   }, 1000);
@@ -1526,23 +1526,27 @@ function stopTalkTimeTracking() {
 
 // Update talk time display
 function updateTalkTimeDisplay() {
+  const currentSeconds = parseInt(sessionStorage.getItem('userTalktime') || '0', 10);
+  const formatted = formatTime(currentSeconds);
+
+  // Update MAIN call screen timer
+  if (timerDisplay) {
+    timerDisplay.textContent = formatted;
+  }
+
+  // Update side panel talktime
   if (talkTimeValue) {
-    // Show Mins:Secs
-    talkTimeValue.textContent = formatTime(totalTalkTime);
+    talkTimeValue.textContent = formatted;
   }
 
   // Also update loading screen talk time if visible
-  if (loadingTalkTimeValue && !screens.loading.classList.contains('hidden')) {
-    // Show Mins:Secs
-    loadingTalkTimeValue.textContent = formatTime(timeRemaining);
+  if (loadingTalkTimeValue && screens.loading && !screens.loading.classList.contains('hidden')) {
+    loadingTalkTimeValue.textContent = formatted;
   }
 
   // Check if talktime is 0 during active session
-  if (sessionActive) {
-    const currentTalktime = parseInt(sessionStorage.getItem('userTalktime') || '0', 10);
-    if (currentTalktime <= 0) {
-      pauseSessionForPayment();
-    }
+  if (sessionActive && currentSeconds <= 0) {
+    pauseSessionForPayment();
   }
 }
 
@@ -1744,14 +1748,21 @@ function stopOnlinePing() {
 
 // Update talktime display across all screens
 function updateTalktimeDisplay(talktime) {
-  // Update side panel talktime (show in minutes)
+  const formatted = formatTime(talktime);
+
+  // *** Update MAIN call screen timer ***
+  if (timerDisplay) {
+    timerDisplay.textContent = formatted;
+  }
+
+  // Update side panel talktime
   const sidePanelTalktimeValueEl = document.getElementById('sidePanelTalktimeValue');
   if (sidePanelTalktimeValueEl) {
-    sidePanelTalktimeValueEl.textContent = talktime.toLocaleString();
+    sidePanelTalktimeValueEl.textContent = formatted;
   }
-  if (talktimeValue) talktimeValue.textContent = talktime.toLocaleString();
-  if (loadingTalktimeValue) loadingTalktimeValue.textContent = talktime.toLocaleString();
-  if (callTalktimeValue) callTalktimeValue.textContent = talktime.toLocaleString();
+  if (talktimeValue) talktimeValue.textContent = formatted;
+  if (loadingTalktimeValue) loadingTalktimeValue.textContent = formatted;
+  if (callTalktimeValue) callTalktimeValue.textContent = formatted;
 
   // Update progress bar (shows seconds)
   updateTalktimeProgressBar(talktime);
