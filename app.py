@@ -1144,8 +1144,32 @@ def secure_heartbeat(current_user_email: str):
         if raw: session_data = json.loads(raw)
 
         if not session_data:
-            # Return 400 (not 401!) so frontend doesn't think auth failed
-            return jsonify({"ok": False, "action": "restart", "reason": "Session not found in Redis"}), 400
+            # [FIX] Auto-recreate session if it's missing (race condition or Redis restart)
+            # This handles cases where session was deleted but user is still connected
+            logger.warning(f"Session missing for {current_user_email}, attempting to recreate...")
+            
+            # Check if user still has balance and is active
+            user = get_user(current_user_email)
+            if not user or int(user.get("talktime", 0)) <= 0:
+                return jsonify({"ok": False, "action": "terminate", "reason": "Insufficient balance", "remaining_seconds": 0}), 400
+            
+            # Recreate the session
+            session_id = str(uuid.uuid4())[:8]
+            now_iso = datetime.now(timezone.utc).isoformat()
+            session_data = {
+                "session_id": session_id,
+                "last_heartbeat": now_iso
+            }
+            redis_client.setex(f"session:{current_user_email}", SESSION_TTL, json.dumps(session_data))
+            logger.info(f"✅ Session recreated for {current_user_email} (ID: {session_id})")
+            
+            # Return success with current balance
+            return jsonify({
+                "ok": True,
+                "remaining_seconds": float(user.get("talktime", 0)),
+                "deducted": 0,
+                "note": "session_recreated"
+            })
 
         # RENEW SESSION TTL - Reset timer to 1 hour on every heartbeat
         redis_client.expire(f"session:{current_user_email}", SESSION_TTL)

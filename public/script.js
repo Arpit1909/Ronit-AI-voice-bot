@@ -1269,18 +1269,23 @@ async function startVoiceSession() {
         updateStatus('Connected', 'default');
         setTimeout(() => { toggleVoiceVisuals('listening'); }, 100);
 
-        // [FIX] Start talk time tracking immediately after connection
-        // This ensures heartbeat starts right away
-        startTalkTimeTracking();
+        // [FIX] Start talk time tracking with a small delay to ensure session is established
+        // Wait 2 seconds before starting heartbeats to give the session time to be created
+        setTimeout(() => {
+          if (sessionActive) {
+            startTalkTimeTracking();
+            console.log('✅ Talk time tracking started');
+          }
+        }, 2000);
 
-        // [FIX] Send an immediate heartbeat to establish the session properly
+        // [FIX] Send an initial heartbeat after a delay to ensure session is fully established
         setTimeout(async () => {
           if (sessionActive) {
             try {
               const token = sessionStorage.getItem('authToken');
               const userEmail = sessionStorage.getItem('userEmail');
               if (token && userEmail) {
-                await fetch('/api/session/heartbeat', {
+                const response = await fetch('/api/session/heartbeat', {
                   method: 'POST',
                   headers: {
                     'Content-Type': 'application/json',
@@ -1288,13 +1293,23 @@ async function startVoiceSession() {
                   },
                   body: JSON.stringify({ email: userEmail, timestamp: Date.now() })
                 });
-                console.log('✅ Initial heartbeat sent');
+                
+                if (response.ok) {
+                  const data = await response.json();
+                  if (data.ok) {
+                    console.log('✅ Initial heartbeat sent and session verified');
+                    sessionStorage.setItem('userTalktime', data.remaining_seconds);
+                    updateTalktimeDisplay(data.remaining_seconds);
+                  }
+                } else {
+                  console.warn('⚠️ Initial heartbeat failed:', response.status);
+                }
               }
             } catch (e) {
-              console.warn('⚠️ Initial heartbeat failed:', e);
+              console.warn('⚠️ Initial heartbeat error:', e);
             }
           }
-        }, 1000); // Send first heartbeat after 1 second
+        }, 2500); // Send first heartbeat after 2.5 seconds
 
         console.log('✅ Session connected successfully');
         console.log('🎤 Microphone should now be active - try speaking to the bot!');
@@ -1511,31 +1526,61 @@ function startTalkTimeTracking() {
         return;
       }
 
-      // Handle 400: Redis session missing - don't logout, just restart call
+      // Handle 400: Redis session missing or other errors
       if (response.status === 400) {
-        console.warn("Redis session missing (400). Call will need to be restarted.");
-        // Don't immediately end - try to recover by restarting the session
         try {
           const data = await response.json();
-          if (data.action === 'restart') {
-            console.log("🔄 Attempting to restart session...");
-            // Give it a moment, then try to reconnect
-            setTimeout(() => {
-              if (sessionActive) {
-                // The SDK should handle reconnection, but if not, we'll end gracefully
-                console.log("⏳ Waiting for session recovery...");
-              }
-            }, 2000);
-          } else {
-            // Only end if it's a true termination
+          
+          // Check if it's a termination (balance exhausted)
+          if (data.action === 'terminate') {
+            console.warn("Server ordered termination:", data.reason);
+            sessionStorage.setItem('userTalktime', '0');
+            updateTalktimeDisplay(0);
             endSession();
+            if (data.remaining_seconds <= 0) {
+              showPaymentModal('during');
+            }
+            return;
           }
+          
+          // If action is 'restart', try to manually restart the session
+          // (This should rarely happen now since backend auto-recreates, but keep as fallback)
+          if (data.action === 'restart') {
+            console.warn("Redis session missing (400). Attempting manual restart...");
+            
+            // Try to restart the session by calling /api/session/start
+            try {
+              const startResponse = await authenticatedFetch('/api/session/start', { method: 'POST' });
+              if (startResponse.ok) {
+                const startData = await startResponse.json();
+                console.log("✅ Session manually restarted successfully");
+                sessionStorage.setItem('userTalktime', startData.remaining_seconds);
+                updateTalktimeDisplay(startData.remaining_seconds);
+                lastConnectionTime = Date.now();
+                return; // Success, exit early
+              } else {
+                const errorData = await startResponse.json().catch(() => ({}));
+                console.error("Failed to restart session:", errorData.error || startResponse.status);
+                // Don't end session immediately - let it retry on next heartbeat
+                return;
+              }
+            } catch (restartErr) {
+              console.error("Error restarting session:", restartErr);
+              // Don't end session immediately - let it retry on next heartbeat
+              return;
+            }
+          }
+          
+          // Unknown 400 error - end session
+          console.error("Unknown 400 error:", data);
+          endSession();
+          return;
         } catch (parseErr) {
           // If we can't parse the response, just end gracefully
           console.warn("Could not parse 400 response, ending session");
           endSession();
+          return;
         }
-        return;
       }
 
       const data = await response.json();
@@ -1557,6 +1602,11 @@ function startTalkTimeTracking() {
         }
         // Update connection activity on successful heartbeat
         lastConnectionTime = Date.now();
+        
+        // Log if session was recreated (for debugging)
+        if (data.note === 'session_recreated') {
+          console.log("✅ Session was auto-recreated by backend");
+        }
       }
 
     } catch (e) {
