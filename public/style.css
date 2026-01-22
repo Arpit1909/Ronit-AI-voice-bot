@@ -314,15 +314,18 @@ h1, h2, h3, .btn {
 .offer-badge {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
   background: var(--surface-subtle); /* Subtle gray background */
   border: none;
-  padding: 8px 16px;
+  padding: 10px 18px;
   border-radius: 8px;
   font-size: 0.875rem;
   color: var(--text-feature);
   margin-bottom: 32px;
   font-weight: 400;
+  line-height: 1.5;
+  text-align: center;
 }
 
 .offer-badge i {
@@ -332,7 +335,8 @@ h1, h2, h3, .btn {
 
 .offer-badge strong {
   color: var(--text-feature);
-  font-weight: 500;
+  font-weight: 600;
+  letter-spacing: 0.02em;
 }
 
 .offer-badge .divider {
