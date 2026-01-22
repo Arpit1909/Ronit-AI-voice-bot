@@ -1476,7 +1476,12 @@ function startTalkTimeTracking() {
   if (talkTimeInterval) clearInterval(talkTimeInterval);
 
   // 1. VISUAL TIMER (Local) - Runs every 1s
+  // [FIX] Don't count down independently - just display the value from sessionStorage
+  // The server sync (every 5s) is the source of truth and updates sessionStorage
+  // This prevents drift between local timer and server credits
   talkTimeInterval = setInterval(() => {
+    if (!sessionActive) return;
+    
     let currentDisplay = parseFloat(sessionStorage.getItem('userTalktime') || 0);
 
     // STRICT MODE: Local Kill Switch
@@ -1488,11 +1493,9 @@ function startTalkTimeTracking() {
     }
 
     if (currentDisplay > 0 && sessionActive) {
-      currentDisplay -= 1; // Visually deduct 1s
-      // Save FIRST so updateTalkTimeDisplay reads the correct value
-      sessionStorage.setItem('userTalktime', currentDisplay.toString());
-      updateTalkTimeDisplay(); // Update all displays
-      if (currentDisplay % 10 === 0) console.log(`⏱️ Time remaining: ${currentDisplay}s`);
+      // [FIX] Just refresh the display - don't decrement locally
+      // Server sync will update sessionStorage with the correct value every 5 seconds
+      updateTalkTimeDisplay();
     }
   }, 1000);
 
@@ -1595,17 +1598,24 @@ function startTalkTimeTracking() {
       }
 
       if (data.ok) {
-        sessionStorage.setItem('userTalktime', data.remaining_seconds);
-        let localTime = parseFloat(sessionStorage.getItem('userTalktime'));
-        if (Math.abs(localTime - data.remaining_seconds) > 2) {
-          updateTalktimeDisplay(Math.floor(data.remaining_seconds));
-        }
+        // [FIX] Always sync with server value - server is the source of truth
+        const serverValue = data.remaining_seconds;
+        sessionStorage.setItem('userTalktime', serverValue.toString());
+        
+        // Update the display with server value (this corrects any drift)
+        updateTalktimeDisplay(Math.floor(serverValue));
+        
         // Update connection activity on successful heartbeat
         lastConnectionTime = Date.now();
         
         // Log if session was recreated (for debugging)
         if (data.note === 'session_recreated') {
           console.log("✅ Session was auto-recreated by backend");
+        }
+        
+        // Log sync if there was a significant difference (for debugging)
+        if (Math.abs(previousValue - serverValue) > 1) {
+          console.log(`🔄 Server sync: ${Math.floor(previousValue)}s → ${Math.floor(serverValue)}s (drift corrected)`);
         }
       }
 

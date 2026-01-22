@@ -843,6 +843,105 @@ def _delayed_email_with_link(email: str, link: str, care_plan_content: str, dela
         logger.exception(f"Email thread error for {email}: {e}")
 
 
+# ===== Risk Detection for Mental Health =====
+def _detect_risk_indicators(transcript: str) -> Dict[str, Any]:
+    """
+    Analyze transcript for suicidal thoughts, self-harm, or serious mental health risks.
+    Returns a dictionary with risk_level, flagged, and details.
+    """
+    if not Config.GEMINI_API_KEY:
+        # Fallback: Simple keyword detection if Gemini is not configured
+        risk_keywords = [
+            "want to die", "kill myself", "suicide", "end my life", "not worth living",
+            "better off dead", "no reason to live", "hurt myself", "self harm",
+            "cutting myself", "overdose", "jump off", "end it all"
+        ]
+        transcript_lower = transcript.lower()
+        found_keywords = [kw for kw in risk_keywords if kw in transcript_lower]
+        
+        if found_keywords:
+            return {
+                "risk_level": "high",
+                "flagged": True,
+                "details": f"Keywords detected: {', '.join(found_keywords)}",
+                "method": "keyword_detection"
+            }
+        return {"risk_level": "low", "flagged": False, "details": "", "method": "keyword_detection"}
+    
+    # Use Gemini AI for more sophisticated risk detection
+    prompt = (
+        "You are a mental health risk assessment AI. Analyze the following conversation transcript "
+        "for indicators of suicidal thoughts, self-harm intentions, or serious mental health crises.\n\n"
+        "IMPORTANT: Respond ONLY with a JSON object in this exact format:\n"
+        '{"risk_level": "low|medium|high", "flagged": true|false, "details": "brief explanation", "urgency": "low|medium|high"}\n\n'
+        "Risk levels:\n"
+        "- low: Normal conversation, no concerning statements\n"
+        "- medium: Some concerning statements but not immediate risk\n"
+        "- high: Clear indicators of suicidal thoughts, self-harm, or immediate crisis\n\n"
+        "Flag if you detect:\n"
+        "- Suicidal ideation or plans\n"
+        "- Self-harm intentions\n"
+        "- Statements like 'I want to die', 'kill myself', 'end my life'\n"
+        "- Severe depression with hopelessness\n"
+        "- Expressions of worthlessness or being a burden\n\n"
+        "Be sensitive but thorough. False positives are better than missing real risks.\n\n"
+        "CONVERSATION TRANSCRIPT:\n"
+        f"{transcript}"
+    )
+    
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{Config.GEMINI_MODEL}:generateContent?key={Config.GEMINI_API_KEY}"
+    payload = {"contents": [{"parts": [{"text": prompt}]}]}
+    
+    try:
+        r = session.post(url, json=payload, timeout=15)
+        r.raise_for_status()
+        data = r.json()
+        
+        if data.get("candidates") and data["candidates"][0]["content"]["parts"]:
+            text = data["candidates"][0]["content"]["parts"][0].get("text", "").strip()
+            if text:
+                # Try to extract JSON from response
+                import re
+                json_match = re.search(r'\{[^}]+\}', text, re.DOTALL)
+                if json_match:
+                    try:
+                        result = json.loads(json_match.group())
+                        logger.info(f"Risk detection completed: {result.get('risk_level', 'unknown')}")
+                        return result
+                    except json.JSONDecodeError:
+                        pass
+                
+                # Fallback: Check if response indicates risk
+                text_lower = text.lower()
+                if any(word in text_lower for word in ["high", "flagged", "suicide", "risk", "urgent"]):
+                    return {
+                        "risk_level": "high",
+                        "flagged": True,
+                        "details": text[:200],
+                        "method": "ai_detection"
+                    }
+        
+        return {"risk_level": "low", "flagged": False, "details": "", "method": "ai_detection"}
+    except Exception as e:
+        logger.exception(f"Risk detection API error: {e}")
+        # Fallback to keyword detection on error
+        risk_keywords = [
+            "want to die", "kill myself", "suicide", "end my life", "not worth living",
+            "better off dead", "no reason to live", "hurt myself", "self harm",
+            "cutting myself", "overdose", "jump off", "end it all"
+        ]
+        transcript_lower = transcript.lower()
+        found_keywords = [kw for kw in risk_keywords if kw in transcript_lower]
+        
+        if found_keywords:
+            return {
+                "risk_level": "high",
+                "flagged": True,
+                "details": f"Keywords detected (fallback): {', '.join(found_keywords)}",
+                "method": "keyword_detection_fallback"
+            }
+        return {"risk_level": "low", "flagged": False, "details": "", "method": "keyword_detection_fallback"}
+
 # ===== Gemini AI Integration =====
 def _call_gemini_mindmap_blueprint(transcript: str) -> str:
     """Generate personalized care plan using Gemini AI in markdown format."""
@@ -1390,6 +1489,48 @@ def upload_session(current_user_email: str):
     if len(transcript) < 10:
         raise AppError("Transcript too short (minimum 10 characters)", status_code=400)
     
+    # [CRITICAL] Risk Detection - Check for suicidal thoughts or serious mental health risks
+    risk_assessment = _detect_risk_indicators(transcript)
+    
+    if risk_assessment.get("flagged", False):
+        risk_level = risk_assessment.get("risk_level", "medium")
+        risk_details = risk_assessment.get("details", "")
+        
+        logger.warning(f"🚨 RISK FLAGGED for {current_user_email}: {risk_level} - {risk_details[:100]}")
+        
+        # Flag the user in database
+        user = get_user(current_user_email)
+        current_flags = user.get("risk_flags", []) if user else []
+        if not isinstance(current_flags, list):
+            current_flags = []
+        
+        # Add new flag entry
+        flag_entry = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "risk_level": risk_level,
+            "details": risk_details[:500],  # Limit details length
+            "transcript_snippet": transcript[:300],  # First 300 chars for context
+            "urgency": risk_assessment.get("urgency", "medium")
+        }
+        current_flags.append(flag_entry)
+        
+        # Keep only last 50 flags per user
+        if len(current_flags) > 50:
+            current_flags = current_flags[-50:]
+        
+        # Update user with flag
+        update_user(current_user_email, {
+            "is_flagged": True,
+            "risk_flags": current_flags,
+            "last_risk_flag": datetime.now(timezone.utc).isoformat(),
+            "highest_risk_level": max(
+                [risk_level] + [f.get("risk_level", "low") for f in current_flags[:-1]],
+                key=lambda x: {"low": 0, "medium": 1, "high": 2}.get(x, 0)
+            )
+        })
+        
+        logger.critical(f"⚠️ User {current_user_email} has been flagged for {risk_level} risk level")
+    
     # Generate session ID and timestamp
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
     session_id = str(uuid.uuid4())[:8]
@@ -1406,7 +1547,8 @@ def upload_session(current_user_email: str):
                 "transcript": transcript,
                 "session_id": session_id,
                 "blueprint_id": blueprint_id,
-                "host_url": request.host_url
+                "host_url": request.host_url,
+                "risk_assessment": risk_assessment  # Include risk assessment in task
             },
             "status": "pending",
             "created_at": datetime.now(timezone.utc).isoformat()
@@ -1422,7 +1564,8 @@ def upload_session(current_user_email: str):
     return jsonify({
         "ok": True,
         "message": "Processing queued",
-        "blueprint_id": blueprint_id
+        "blueprint_id": blueprint_id,
+        "risk_detected": risk_assessment.get("flagged", False)
     })
 
 @app.get("/blueprint/<blueprint_id>")
@@ -1775,6 +1918,14 @@ def get_all_users():
         # Calculate total session duration
         total_duration = sum(s.get("duration", 0) for s in sessions)
         
+        # Get risk flag information
+        is_flagged = user_data.get("is_flagged", False)
+        risk_flags = user_data.get("risk_flags", [])
+        if not isinstance(risk_flags, list):
+            risk_flags = []
+        highest_risk_level = user_data.get("highest_risk_level", "low")
+        last_risk_flag = user_data.get("last_risk_flag")
+        
         users_list.append({
             "email": user_data.get("email", email),
             "talktime": user_data.get("talktime", 0),
@@ -1788,21 +1939,34 @@ def get_all_users():
             "sessions": sessions[-10:],
             "welcome_bonus_given": user_data.get("welcome_bonus_given", False),
             "welcome_bonus_date": user_data.get("welcome_bonus_date"),
-            "updated_at": user_data.get("updated_at", "Unknown")
+            "updated_at": user_data.get("updated_at", "Unknown"),
+            # Risk flag information
+            "is_flagged": is_flagged,
+            "risk_flag_count": len(risk_flags),
+            "highest_risk_level": highest_risk_level,
+            "last_risk_flag": last_risk_flag,
+            "recent_risk_flags": risk_flags[-5:] if risk_flags else []  # Last 5 flags
         })
     
-    # Sort by last login (most recent first), then by online status
+    # Sort by flagged status first (flagged users at top), then by last login
     users_list.sort(key=lambda x: (
+        x["is_flagged"],  # Flagged users first
+        x["highest_risk_level"] == "high",  # High risk first among flagged
         x["is_online"],  # Online users first
         x["last_login"] or ""  # Then by last login
     ), reverse=True)
+    
+    flagged_count = sum(1 for u in users_list if u["is_flagged"])
+    high_risk_count = sum(1 for u in users_list if u["highest_risk_level"] == "high")
     
     return jsonify({
         "ok": True,
         "users": users_list,
         "total": len(users_list),
         "online_count": sum(1 for u in users_list if u["is_online"]),
-        "offline_count": sum(1 for u in users_list if not u["is_online"])
+        "offline_count": sum(1 for u in users_list if not u["is_online"]),
+        "flagged_count": flagged_count,
+        "high_risk_count": high_risk_count
     })
 
 @app.get("/api/admin/stats")
@@ -1986,6 +2150,100 @@ def toggle_vip_endpoint(email: str):
     
     status_msg = "Promoted to VIP" if new_status else "Removed from VIP"
     return jsonify({"ok": True, "message": f"{email} {status_msg}", "is_vip": new_status})
+
+@app.get("/api/admin/flagged-users")
+@limiter.limit("100 per hour")
+def get_flagged_users():
+    """Get all flagged users (admin only)."""
+    verify_admin_token()
+    users = load_users()
+    
+    flagged_users = []
+    now = datetime.now(timezone.utc)
+    
+    for email, user_data in users.items():
+        is_flagged = user_data.get("is_flagged", False)
+        if not is_flagged:
+            continue
+        
+        risk_flags = user_data.get("risk_flags", [])
+        if not isinstance(risk_flags, list):
+            risk_flags = []
+        
+        highest_risk_level = user_data.get("highest_risk_level", "low")
+        last_risk_flag = user_data.get("last_risk_flag")
+        
+        # Calculate time since last flag
+        time_since_flag = None
+        if last_risk_flag:
+            try:
+                if isinstance(last_risk_flag, str):
+                    if last_risk_flag.endswith('Z'):
+                        flag_time = datetime.fromisoformat(last_risk_flag.replace('Z', '+00:00'))
+                    else:
+                        flag_time = datetime.fromisoformat(last_risk_flag)
+                    if flag_time.tzinfo is None:
+                        flag_time = flag_time.replace(tzinfo=timezone.utc)
+                    time_since_flag = (now - flag_time).total_seconds() / 3600  # Hours
+            except Exception:
+                pass
+        
+        flagged_users.append({
+            "email": user_data.get("email", email),
+            "talktime": user_data.get("talktime", 0),
+            "is_community_member": user_data.get("is_community_member", False),
+            "created_at": user_data.get("created_at", "Unknown"),
+            "last_login": user_data.get("last_login", "Never"),
+            "total_sessions": user_data.get("total_sessions", 0),
+            # Risk information
+            "is_flagged": True,
+            "risk_flag_count": len(risk_flags),
+            "highest_risk_level": highest_risk_level,
+            "last_risk_flag": last_risk_flag,
+            "time_since_flag_hours": round(time_since_flag, 1) if time_since_flag else None,
+            "all_risk_flags": risk_flags  # All flags for detailed view
+        })
+    
+    # Sort by risk level (high first), then by most recent flag
+    flagged_users.sort(key=lambda x: (
+        {"high": 3, "medium": 2, "low": 1}.get(x["highest_risk_level"], 0),
+        x["last_risk_flag"] or ""
+    ), reverse=True)
+    
+    high_risk = [u for u in flagged_users if u["highest_risk_level"] == "high"]
+    medium_risk = [u for u in flagged_users if u["highest_risk_level"] == "medium"]
+    low_risk = [u for u in flagged_users if u["highest_risk_level"] == "low"]
+    
+    return jsonify({
+        "ok": True,
+        "flagged_users": flagged_users,
+        "total_flagged": len(flagged_users),
+        "high_risk_count": len(high_risk),
+        "medium_risk_count": len(medium_risk),
+        "low_risk_count": len(low_risk),
+        "high_risk_users": high_risk,
+        "medium_risk_users": medium_risk,
+        "low_risk_users": low_risk
+    })
+
+@app.post("/api/admin/users/<email>/clear-flag")
+@limiter.limit("50 per hour")
+def clear_user_flag(email: str):
+    """Clear risk flag for a user (admin only)."""
+    verify_admin_token()
+    if not validate_email(email): raise AppError("Invalid email", status_code=400)
+    
+    user = get_user(email)
+    if not user: raise AppError("User not found", status_code=404)
+    
+    update_user(email, {
+        "is_flagged": False,
+        "highest_risk_level": "low"
+        # Keep risk_flags for audit trail, just clear the active flag
+    })
+    
+    logger.info(f"Admin cleared risk flag for {email}")
+    return jsonify({"ok": True, "message": f"Risk flag cleared for {email}"})
 
 # ===== Application Startup =====
 @app.post("/api/auth/google")
