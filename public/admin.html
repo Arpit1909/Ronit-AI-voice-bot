@@ -935,11 +935,11 @@
 
     // --- Helpers ---
     function formatTalktime(s) {
-      if (!s) return "0 sec";
-      const m = Math.floor(s / 60);
-      const sec = s % 60;
-      if (m > 0) return `${m} min ${sec} sec`;
-      return `${sec} sec`;
+      if (!s) return "00:00";
+      const totalSec = Math.floor(s); // Floor to hide milliseconds
+      const m = Math.floor(totalSec / 60);
+      const sec = totalSec % 60;
+      return `${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
     }
 
     function getTimeAgo(d) {

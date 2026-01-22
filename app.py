@@ -1159,12 +1159,14 @@ def secure_heartbeat(current_user_email: str):
         now = datetime.now(timezone.utc)
         delta_seconds = (now - last_heartbeat).total_seconds()
         
-        MAX_HEARTBEAT_GAP = 10.0
+        # Increased tolerance: heartbeat runs every 5s, allow up to 30s gap for network delays
+        MAX_HEARTBEAT_GAP = 30.0
         
         if delta_seconds > MAX_HEARTBEAT_GAP:
             logger.warning(f"Heartbeat timeout ({delta_seconds}s) for {current_user_email}. Terminating.")
             
-            deduction = MAX_HEARTBEAT_GAP
+            # Only deduct actual time used, capped at MAX_HEARTBEAT_GAP
+            deduction = min(delta_seconds, MAX_HEARTBEAT_GAP)
             user = get_user(current_user_email)
             current_balance = float(user.get("talktime", 0))
             new_balance = max(0, current_balance - deduction)

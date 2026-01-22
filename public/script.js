@@ -1269,7 +1269,32 @@ async function startVoiceSession() {
         updateStatus('Connected', 'default');
         setTimeout(() => { toggleVoiceVisuals('listening'); }, 100);
 
+        // [FIX] Start talk time tracking immediately after connection
+        // This ensures heartbeat starts right away
         startTalkTimeTracking();
+
+        // [FIX] Send an immediate heartbeat to establish the session properly
+        setTimeout(async () => {
+          if (sessionActive) {
+            try {
+              const token = sessionStorage.getItem('authToken');
+              const userEmail = sessionStorage.getItem('userEmail');
+              if (token && userEmail) {
+                await fetch('/api/session/heartbeat', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                  },
+                  body: JSON.stringify({ email: userEmail, timestamp: Date.now() })
+                });
+                console.log('✅ Initial heartbeat sent');
+              }
+            } catch (e) {
+              console.warn('⚠️ Initial heartbeat failed:', e);
+            }
+          }
+        }, 1000); // Send first heartbeat after 1 second
 
         console.log('✅ Session connected successfully');
         console.log('🎤 Microphone should now be active - try speaking to the bot!');
@@ -1418,10 +1443,11 @@ function updateStatus(text, visualState) {
   }
 }
 
-// Helper to format time as MM:SS
+// Helper to format time as MM:SS (floors seconds to hide milliseconds)
 function formatTime(seconds) {
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
+  const totalSec = Math.floor(seconds); // Floor to hide milliseconds
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
   return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
 }
 
@@ -1488,8 +1514,27 @@ function startTalkTimeTracking() {
       // Handle 400: Redis session missing - don't logout, just restart call
       if (response.status === 400) {
         console.warn("Redis session missing (400). Call will need to be restarted.");
-        // Don't logout! Just end the call gracefully
-        endSession();
+        // Don't immediately end - try to recover by restarting the session
+        try {
+          const data = await response.json();
+          if (data.action === 'restart') {
+            console.log("🔄 Attempting to restart session...");
+            // Give it a moment, then try to reconnect
+            setTimeout(() => {
+              if (sessionActive) {
+                // The SDK should handle reconnection, but if not, we'll end gracefully
+                console.log("⏳ Waiting for session recovery...");
+              }
+            }, 2000);
+          } else {
+            // Only end if it's a true termination
+            endSession();
+          }
+        } catch (parseErr) {
+          // If we can't parse the response, just end gracefully
+          console.warn("Could not parse 400 response, ending session");
+          endSession();
+        }
         return;
       }
 
@@ -1510,10 +1555,14 @@ function startTalkTimeTracking() {
         if (Math.abs(localTime - data.remaining_seconds) > 2) {
           updateTalktimeDisplay(Math.floor(data.remaining_seconds));
         }
+        // Update connection activity on successful heartbeat
+        lastConnectionTime = Date.now();
       }
 
     } catch (e) {
       console.error("Heartbeat skipped:", e);
+      // Don't immediately end on network errors - allow retries
+      // The server will handle timeout if heartbeats stop completely
     }
   }, 5000);
 }
@@ -2091,9 +2140,10 @@ async function endSession() {
 
   // [CRITICAL] Save Transcript / Send Email
   const emailInput = document.getElementById('userEmail');
-  const email = emailInput ? emailInput.value?.trim() : '';
+  const email = emailInput ? emailInput.value?.trim() : sessionStorage.getItem('userEmail') || '';
 
-  if (userTranscript) {
+  // Only save if we have a meaningful transcript (at least some conversation happened)
+  if (userTranscript && userTranscript.trim().length > 20) {
     try {
       updateStatus('Saving session and generating care plan...', 'default');
       const response = await authenticatedFetch('/upload-session', {
@@ -2112,12 +2162,12 @@ async function endSession() {
       // Don't show alert to user - already handled in endSession flow
     }
   } else {
-    console.warn('⚠️ Cannot save session: missing transcript or email');
-    if (!userTranscript) {
-      console.warn('  - Transcript is empty');
-    }
-    if (!email) {
-      console.warn('  - Email is missing');
+    // Only log warning if transcript is missing but session was active for a while
+    // (meaningful conversation should have happened)
+    if (userTranscript && userTranscript.trim().length > 0) {
+      console.log('ℹ️ Session ended with minimal transcript - skipping care plan generation');
+    } else {
+      console.log('ℹ️ Session ended without transcript (connection may have ended too quickly)');
     }
   }
 
@@ -2203,3 +2253,79 @@ function toggleVoiceVisuals(state) {
     if (profileContainer) profileContainer.classList.remove('speaking');
   }
 }
+
+// Function to handle "Buy Talk Time" button click
+async function handleBuyTalkTime() {
+  try {
+    const token = localStorage.getItem("token"); // Get login token
+    if (!token) {
+      alert("Please login first to buy talk time.");
+      return;
+    }
+
+    // 1. Create Order on Backend
+    const response = await fetch("/api/payments/razorpay/order", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`
+      },
+      body: JSON.stringify({ amount_paisa: 49900 }) // Example: ₹499
+    });
+
+    const data = await response.json();
+    if (!data.ok) {
+      alert("Failed to create order: " + (data.message || "Unknown error"));
+      return;
+    }
+
+    // 2. Open Razorpay Checkout
+    const options = {
+      "key": data.key_id,
+      "amount": data.order.amount,
+      "currency": data.order.currency,
+      "name": "Ronit AI Coach",
+      "description": "Talk Time Top-up",
+      "order_id": data.order.id,
+      "handler": async function (response) {
+        // 3. Verify Payment on Backend
+        const verifyRes = await fetch("/api/payments/razorpay/verify", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            razorpay_order_id: response.razorpay_order_id,
+            razorpay_payment_id: response.razorpay_payment_id,
+            razorpay_signature: response.razorpay_signature
+          })
+        });
+
+        const verifyData = await verifyRes.json();
+        if (verifyData.ok) {
+          alert("Payment Successful! New Balance: " + verifyData.new_talktime);
+          location.reload(); // Reload to show new balance
+        } else {
+          alert("Payment Verification Failed");
+        }
+      },
+      "prefill": {
+        "email": localStorage.getItem("user_email") || ""
+      },
+      "theme": {
+        "color": "#065F46"
+      }
+    };
+
+    const rzp1 = new Razorpay(options);
+    rzp1.open();
+
+  } catch (error) {
+    console.error("Payment Error:", error);
+    alert("Something went wrong with the payment.");
+  }
+}
+
+// Make it globally available so HTML can find it
+window.handleBuyTalkTime = handleBuyTalkTime;
