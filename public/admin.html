@@ -487,6 +487,10 @@
       .stats-grid {
         grid-template-columns: repeat(2, 1fr);
       }
+      
+      .content-wrapper > div[style*="grid-template-columns: 1fr 1fr"] {
+        grid-template-columns: 1fr !important;
+      }
     }
   </style>
 </head>
@@ -566,6 +570,18 @@
         <div class="card">
           <div class="stat-label">Sessions <i class="fas fa-history"></i></div>
           <div class="stat-value" id="statTotalSessions">0</div>
+        </div>
+      </div>
+
+      <!-- Charts Section -->
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 2rem;">
+        <div class="card">
+          <div class="stat-label">User Status Distribution</div>
+          <canvas id="statusChart" style="max-height: 300px;"></canvas>
+        </div>
+        <div class="card">
+          <div class="stat-label">Community Members vs Regular Users</div>
+          <canvas id="membershipChart" style="max-height: 300px;"></canvas>
         </div>
       </div>
 
@@ -655,6 +671,7 @@
     let currentPage = 1;
     let itemsPerPage = 8;
     let currentSort = { column: 'last_login', direction: 'desc' };
+    let refreshInterval;
 
     // --- Authentication ---
     document.getElementById('adminLoginForm').addEventListener('submit', async (e) => {
@@ -698,12 +715,16 @@
     }
 
     function logout() {
-      stopAutoRefresh();
+      if (refreshInterval) {
+        stopAutoRefresh();
+      }
       adminToken = null;
       localStorage.removeItem('adminToken');
       document.getElementById('adminPanel').style.display = 'none';
       document.getElementById('loginModal').classList.add('active');
       document.getElementById('adminLoginForm').reset();
+      allUsers = [];
+      filteredUsers = [];
     }
 
     // --- Data Loading ---
@@ -733,8 +754,10 @@
           filterUsers(); // Triggers render
         }
 
-        // Update Charts
-        if (stats.ok && allUsers.length > 0) updateCharts(stats.stats);
+        // Update Charts after both stats and users are loaded
+        if (stats.ok && users.ok && allUsers.length > 0) {
+          updateCharts(stats.stats);
+        }
 
       } catch (error) {
         showAlert('System Sync Error: ' + error.message, 'error');
@@ -742,17 +765,134 @@
     }
 
     // --- Charts ---
-    let activityChart = null; // Basic placeholder if needed
+    let statusChart = null;
+    let membershipChart = null;
+
     function updateCharts(stats) {
-      // Since the new design removed the canvas elements for simplicity in the "Overview" section 
-      // (the cards replaced them for cleaner look), we might not need this.
-      // However, if the user *wanted* the charts, I should check if I included canvas tags.
-      // Looking at my previous write_to_file, I DID NOT include <canvas> tags. 
-      // So I should probably leave this out OR add the canvas tags back if I want 'God Level' stats.
-      // The user request was "redesign... input box... proper aligned".
-      // The cards are "Stats Grid". 
-      // I will stick to the cards for now as they look more professional than a messy chart unless requested.
-      // But I will keep the function stub to prevent errors if I call it.
+      if (!allUsers || allUsers.length === 0) return;
+
+      // Calculate data for charts
+      const onlineCount = allUsers.filter(u => u.is_online).length;
+      const offlineCount = allUsers.length - onlineCount;
+      
+      const communityCount = allUsers.filter(u => u.is_community_member).length;
+      const regularCount = allUsers.length - communityCount;
+
+      // Status Chart (Online vs Offline)
+      const statusCtx = document.getElementById('statusChart');
+      if (statusCtx) {
+        if (statusChart) statusChart.destroy();
+        statusChart = new Chart(statusCtx, {
+          type: 'pie',
+          data: {
+            labels: ['Online', 'Offline'],
+            datasets: [{
+              data: [onlineCount, offlineCount],
+              backgroundColor: [
+                'rgba(16, 185, 129, 0.8)',
+                'rgba(148, 163, 184, 0.8)'
+              ],
+              borderColor: [
+                'rgba(16, 185, 129, 1)',
+                'rgba(148, 163, 184, 1)'
+              ],
+              borderWidth: 2
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+              legend: {
+                position: 'bottom',
+                labels: {
+                  color: '#f8fafc',
+                  padding: 15,
+                  font: {
+                    family: 'Inter',
+                    size: 12
+                  }
+                }
+              },
+              tooltip: {
+                backgroundColor: 'rgba(30, 41, 59, 0.95)',
+                titleColor: '#f8fafc',
+                bodyColor: '#f8fafc',
+                borderColor: 'rgba(148, 163, 184, 0.3)',
+                borderWidth: 1,
+                padding: 12,
+                callbacks: {
+                  label: function(context) {
+                    const label = context.label || '';
+                    const value = context.parsed || 0;
+                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                    const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+                    return `${label}: ${value} (${percentage}%)`;
+                  }
+                }
+              }
+            }
+          }
+        });
+      }
+
+      // Membership Chart (Community vs Regular)
+      const membershipCtx = document.getElementById('membershipChart');
+      if (membershipCtx) {
+        if (membershipChart) membershipChart.destroy();
+        membershipChart = new Chart(membershipCtx, {
+          type: 'pie',
+          data: {
+            labels: ['Community Members', 'Regular Users'],
+            datasets: [{
+              data: [communityCount, regularCount],
+              backgroundColor: [
+                'rgba(245, 158, 11, 0.8)',
+                'rgba(139, 92, 246, 0.8)'
+              ],
+              borderColor: [
+                'rgba(245, 158, 11, 1)',
+                'rgba(139, 92, 246, 1)'
+              ],
+              borderWidth: 2
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+              legend: {
+                position: 'bottom',
+                labels: {
+                  color: '#f8fafc',
+                  padding: 15,
+                  font: {
+                    family: 'Inter',
+                    size: 12
+                  }
+                }
+              },
+              tooltip: {
+                backgroundColor: 'rgba(30, 41, 59, 0.95)',
+                titleColor: '#f8fafc',
+                bodyColor: '#f8fafc',
+                borderColor: 'rgba(148, 163, 184, 0.3)',
+                borderWidth: 1,
+                padding: 12,
+                callbacks: {
+                  label: function(context) {
+                    const label = context.label || '';
+                    const value = context.parsed || 0;
+                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                    const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+                    return `${label}: ${value} (${percentage}%)`;
+                  }
+                }
+              }
+            }
+          }
+        });
+      }
     }
 
     // --- Table & Filtering ---
@@ -976,7 +1116,6 @@
     }
 
     function refreshData() { loadData(); showAlert('Synced.', 'success'); }
-    let refreshInterval;
     function startAutoRefresh() { refreshInterval = setInterval(() => { if (adminToken) loadData(); }, 30000); }
     function stopAutoRefresh() { clearInterval(refreshInterval); }
 
