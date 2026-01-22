@@ -1382,14 +1382,14 @@ def user_ping(current_user_email: str):
 @limiter.limit("5 per minute")
 @token_required
 def conversation_token(current_user_email: str):
-    """Get conversation token from ElevenLabs (VIP ONLY)."""
+    """Get conversation token from ElevenLabs (Community Members ONLY)."""
     global _TOKEN_CACHE
     
-    # --- CHECKS THE ID (VIP Only) ---
+    # --- CHECKS THE ID (Community Members Only) ---
     user = get_user(current_user_email)
     if not user or not user.get("is_community_member"):
         logger.warning(f"⛔ Token Denied: {current_user_email} is not a Community Member")
-        raise AppError("Access Restricted: VIP Only", status_code=403)
+        raise AppError("Access Restricted: Community Members Only", status_code=403)
     # -----------------------------------
 
     # Validate configuration
@@ -2148,8 +2148,8 @@ def toggle_vip_endpoint(email: str):
         "last_community_refill": None if not new_status else user.get("last_community_refill")
     })
     
-    status_msg = "Promoted to VIP" if new_status else "Removed from VIP"
-    return jsonify({"ok": True, "message": f"{email} {status_msg}", "is_vip": new_status})
+    status_msg = "Promoted to Community Member" if new_status else "Removed from Community Member"
+    return jsonify({"ok": True, "message": f"{email} {status_msg}", "is_community_member": new_status})
 
 @app.get("/api/admin/flagged-users")
 @limiter.limit("100 per hour")

@@ -1720,7 +1720,7 @@ async function initializeTalktime() {
         const badge = document.getElementById('vipBadge');
         if (badge) badge.classList.remove('hidden');
 
-        // [FIX] Enable button ONLY if VIP and has balance
+        // [FIX] Enable button ONLY if Community Member and has balance
         if (talktime > 0 && micBtn) {
           micBtn.disabled = false;
         } else if (micBtn) {
@@ -1729,7 +1729,7 @@ async function initializeTalktime() {
         }
 
       } else {
-        // ⛔ STRICT VIP CHECK: If not a community member, BLOCK ACCESS
+        // ⛔ STRICT COMMUNITY MEMBER CHECK: If not a community member, BLOCK ACCESS
         console.warn("⛔ User is NOT a community member. Access denied.");
         showVIPRestriction();
         return; // Stop further initialization
@@ -1763,7 +1763,7 @@ async function initializeTalktime() {
   }
 }
 
-// --- VIP Restriction Helpers ---
+// --- Community Member Restriction Helpers ---
 function showVIPRestriction() {
   const modal = document.getElementById('vipRestrictionModal');
   if (modal) {

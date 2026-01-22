@@ -227,7 +227,7 @@
       color: white;
     }
 
-    /* --- VIP Manager (The Input Box) --- */
+    /* --- Community Member Manager (The Input Box) --- */
     .vip-manager {
       background: linear-gradient(135deg, rgba(30, 41, 59, 0.6), rgba(15, 23, 42, 0.8));
       border: 1px solid rgba(139, 92, 246, 0.3);
@@ -556,8 +556,8 @@
       <!-- VIP Manager -->
       <div class="vip-manager">
         <div class="vip-info">
-          <h2><i class="fas fa-crown" style="color: var(--warning);"></i> God Mode Access</h2>
-          <p>Instantly grant VIP status to a user. This includes priority queuing, extended talk time, and premium
+          <h2><i class="fas fa-crown" style="color: var(--warning);"></i> Community Member Access</h2>
+          <p>Instantly grant Community Member status to a user. This includes priority queuing, extended talk time, and premium
             features.</p>
         </div>
         <div class="vip-actions">
@@ -775,7 +775,7 @@
       tbody.innerHTML = pageUsers.map(user => {
         const isOnline = user.is_online || false;
         const statusBadge = isOnline ? '<span class="badge online">Online</span>' : '<span class="badge offline">Offline</span>';
-        const vipBadge = user.is_community_member ? '<span class="badge vip"><i class="fas fa-crown"></i> VIP</span>' : '<span style="color:var(--text-muted); font-size:0.8rem;">User</span>';
+        const vipBadge = user.is_community_member ? '<span class="badge vip"><i class="fas fa-crown"></i> Community Member</span>' : '<span style="color:var(--text-muted); font-size:0.8rem;">User</span>';
 
         return `
         <tr>
@@ -871,7 +871,7 @@
                <i class="fas fa-undo"></i> Reset Time
              </button>
              <button class="btn" style="flex:1; justify-content:center; border-color:${user.is_community_member ? 'var(--text-muted)' : 'var(--brand-primary)'}; color:${user.is_community_member ? 'var(--text-muted)' : 'var(--brand-primary)'};" onclick="toggleVIP('${user.email}')">
-               <i class="${user.is_community_member ? 'fas fa-user-minus' : 'fas fa-crown'}"></i> ${user.is_community_member ? 'Remove VIP' : 'Make VIP'}
+               <i class="${user.is_community_member ? 'fas fa-user-minus' : 'fas fa-crown'}"></i> ${user.is_community_member ? 'Remove Community Member' : 'Make Community Member'}
              </button>
            </div>
 
