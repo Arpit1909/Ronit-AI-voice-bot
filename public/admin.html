@@ -358,6 +358,7 @@
       padding: 1rem 1.5rem;
       border-bottom: 1px solid var(--border-color);
       font-size: 0.9rem;
+      vertical-align: middle;
     }
 
     tr:last-child td {
@@ -367,6 +368,11 @@
     .badge {
       padding: 0.25rem 0.6rem;
       border-radius: 1rem;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      white-space: nowrap;
+      vertical-align: middle;
       font-size: 0.75rem;
       font-weight: 600;
     }
@@ -385,6 +391,16 @@
       background: rgba(245, 158, 11, 0.15);
       color: #fbbf24;
       border: 1px solid rgba(245, 158, 11, 0.2);
+    }
+    
+    .badge.vip i {
+      font-size: 0.85rem;
+      flex-shrink: 0;
+      line-height: 1;
+    }
+    
+    .badge.vip span {
+      line-height: 1.2;
     }
 
     /* --- Login Modal --- */
@@ -556,7 +572,7 @@
       <!-- VIP Manager -->
       <div class="vip-manager">
         <div class="vip-info">
-          <h2><i class="fas fa-crown" style="color: var(--warning);"></i> Community Member Access</h2>
+          <h2><i class="fas fa-crown" style="color: var(--warning);"></i> Community Access</h2>
           <p>Instantly grant Community Member status to a user. This includes priority queuing, extended talk time, and premium
             features.</p>
         </div>
@@ -775,7 +791,7 @@
       tbody.innerHTML = pageUsers.map(user => {
         const isOnline = user.is_online || false;
         const statusBadge = isOnline ? '<span class="badge online">Online</span>' : '<span class="badge offline">Offline</span>';
-        const vipBadge = user.is_community_member ? '<span class="badge vip"><i class="fas fa-crown"></i> Community Member</span>' : '<span style="color:var(--text-muted); font-size:0.8rem;">User</span>';
+        const vipBadge = user.is_community_member ? '<span class="badge vip"><i class="fas fa-crown"></i><span>Community Member</span></span>' : '<span style="color:var(--text-muted); font-size:0.8rem; display:inline-block;">User</span>';
 
         return `
         <tr>
