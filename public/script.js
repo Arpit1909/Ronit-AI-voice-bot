@@ -2237,14 +2237,14 @@ async function endSession() {
     }
   }
 
-  // Show success message about care plan email
+  // [FIX] Fast, smooth redirect - show alert briefly then immediate reload
   alert("Call ended! Your personalized care plan is being sent to your email. Please check your inbox in a few minutes.");
-
-  // [FIX] Auto-refresh and redirect to home page after a short delay
+  
+  // Immediate redirect for rapid, smooth reload
+  // Use location.reload() for faster refresh (preserves current page state better)
   setTimeout(() => {
-    // Refresh the page to reset all state and return to home
-    window.location.href = '/';
-  }, 2000);
+    window.location.reload();
+  }, 50); // Minimal delay for smooth transition
 }
 
 // --- REAL-TIME TEXT STATUS ENGINE ---
