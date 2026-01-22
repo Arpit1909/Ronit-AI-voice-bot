@@ -1878,10 +1878,11 @@ function updateTalktimeDisplay(talktime) {
     timerDisplay.textContent = formatted;
   }
 
-  // Update side panel talktime
+  // Update side panel talktime (show as minutes)
   const sidePanelTalktimeValueEl = document.getElementById('sidePanelTalktimeValue');
   if (sidePanelTalktimeValueEl) {
-    sidePanelTalktimeValueEl.textContent = formatted;
+    const minutes = Math.floor(talktime / 60);
+    sidePanelTalktimeValueEl.textContent = minutes;
   }
   if (talktimeValue) talktimeValue.textContent = formatted;
   if (loadingTalktimeValue) loadingTalktimeValue.textContent = formatted;
@@ -1929,8 +1930,11 @@ function updateTalktimeProgressBar(currentTalktime) {
   // Update progress bar width
   progressFill.style.width = `${percentage}%`;
 
-  // Update progress text (show seconds)
-  progressText.textContent = `${currentTalktime.toLocaleString()}s / ${maxTalktime.toLocaleString()}s`;
+  // Hide progress text (removed per user request)
+  if (progressText) {
+    progressText.textContent = '';
+    progressText.style.display = 'none';
+  }
 
   // Update color based on percentage
   progressFill.classList.remove('low', 'critical');
