@@ -1598,8 +1598,12 @@ function startTalkTimeTracking() {
       }
 
       if (data.ok) {
-        // [FIX] Always sync with server value - server is the source of truth
+        // [FIX] Server is the source of truth - always sync with server value
         const serverValue = data.remaining_seconds;
+        // Get previous value BEFORE updating sessionStorage
+        const previousValue = parseFloat(sessionStorage.getItem('userTalktime') || 0);
+        
+        // Update sessionStorage with server value (this is the source of truth)
         sessionStorage.setItem('userTalktime', serverValue.toString());
         
         // Update the display with server value (this corrects any drift)
