@@ -1476,9 +1476,8 @@ function startTalkTimeTracking() {
   if (talkTimeInterval) clearInterval(talkTimeInterval);
 
   // 1. VISUAL TIMER (Local) - Runs every 1s
-  // [FIX] Don't count down independently - just display the value from sessionStorage
-  // The server sync (every 5s) is the source of truth and updates sessionStorage
-  // This prevents drift between local timer and server credits
+  // [FIX] Count down 1 second at a time for smooth visual updates
+  // Server sync (every 5s) will correct any drift
   talkTimeInterval = setInterval(() => {
     if (!sessionActive) return;
     
@@ -1493,8 +1492,10 @@ function startTalkTimeTracking() {
     }
 
     if (currentDisplay > 0 && sessionActive) {
-      // [FIX] Just refresh the display - don't decrement locally
-      // Server sync will update sessionStorage with the correct value every 5 seconds
+      // [FIX] Decrement 1 second locally for smooth countdown
+      // Server sync every 5 seconds will correct any drift
+      currentDisplay -= 1;
+      sessionStorage.setItem('userTalktime', currentDisplay.toString());
       updateTalkTimeDisplay();
     }
   }, 1000);
@@ -1617,8 +1618,9 @@ function startTalkTimeTracking() {
           console.log("✅ Session was auto-recreated by backend");
         }
         
-        // Log sync if there was a significant difference (for debugging)
-        if (Math.abs(previousValue - serverValue) > 1) {
+        // Only log if there was significant drift (more than 2 seconds difference)
+        // This prevents spam when local countdown is working correctly
+        if (Math.abs(previousValue - serverValue) > 2) {
           console.log(`🔄 Server sync: ${Math.floor(previousValue)}s → ${Math.floor(serverValue)}s (drift corrected)`);
         }
       }
