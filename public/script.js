@@ -1878,11 +1878,11 @@ function updateTalktimeDisplay(talktime) {
     timerDisplay.textContent = formatted;
   }
 
-  // Update side panel talktime (show as minutes)
+  // Update side panel talktime (show as MM:SS min format)
   const sidePanelTalktimeValueEl = document.getElementById('sidePanelTalktimeValue');
   if (sidePanelTalktimeValueEl) {
-    const minutes = Math.floor(talktime / 60);
-    sidePanelTalktimeValueEl.textContent = minutes;
+    // Keep the MM:SS format but unit will be "min" instead of "sec"
+    sidePanelTalktimeValueEl.textContent = formatted;
   }
   if (talktimeValue) talktimeValue.textContent = formatted;
   if (loadingTalktimeValue) loadingTalktimeValue.textContent = formatted;
