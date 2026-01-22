@@ -2240,43 +2240,10 @@ async function endSession() {
   // Show success message about care plan email
   alert("Call ended! Your personalized care plan is being sent to your email. Please check your inbox in a few minutes.");
 
-  // Redirect back to Ronit start page after a delay
+  // [FIX] Auto-refresh and redirect to home page after a short delay
   setTimeout(() => {
-    if (screens.call) screens.call.classList.add('hidden');
-    if (screens.ronitStart) {
-      screens.ronitStart.classList.remove('hidden');
-      if (footer) footer.style.display = 'block';
-
-      // Show side panel again
-      const sidePanel = document.getElementById('sidePanel');
-      const sidePanelToggle = document.getElementById('sidePanelToggle');
-      if (sidePanel) {
-        sidePanel.style.display = 'flex';
-        sidePanel.style.visibility = '';
-        sidePanel.classList.remove('call-hidden');
-        // Update toggle button visibility based on panel state
-        const isClosed = sidePanel.classList.contains('closed');
-        if (sidePanelToggle) {
-          sidePanelToggle.style.display = isClosed ? 'flex' : 'none';
-          sidePanelToggle.style.visibility = '';
-          sidePanelToggle.classList.remove('call-hidden');
-        }
-      }
-    }
-    // Reset timer and status
-    timeRemaining = 0; // [FIX] Reset to 0 (will need reload or re-sync for new session)
-    totalTalkTime = 0;
-    if (timerDisplay) timerDisplay.textContent = formatTime(0); // [FIX] Show 00:00
-    if (talkTimeValue) talkTimeValue.textContent = formatTime(0);
-    if (buyTalkTimeBtn) {
-      buyTalkTimeBtn.style.display = 'none';
-      buyTalkTimeBtn.disabled = false;
-      buyTalkTimeBtn.textContent = '⏱️ Buy More Talk Time';
-    }
-    // Set status to Ready when returning to start screen
-    if (callStatus) {
-      toggleVoiceVisuals('idle');
-    }
+    // Refresh the page to reset all state and return to home
+    window.location.href = '/';
   }, 2000);
 }
 
