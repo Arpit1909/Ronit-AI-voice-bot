@@ -5,7 +5,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin Command Center | Ronit AI</title>
-
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>">
   <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1079,7 +1079,7 @@
             <i class="fas fa-sync-alt"></i> Refresh
           </button>
         </div>
-        <div id="pendingCommunityList" style="min-height: 50px;">
+        <div id="pendingCommunityList" style="min-height: 50px; max-height: 320px; overflow-y: auto; overflow-x: hidden;">
           <div style="text-align: center; color: var(--text-muted); padding: 2rem;">
             <i class="fas fa-spinner fa-spin" style="font-size: 1.5rem; margin-bottom: 0.5rem;"></i>
             <div>Loading pending members...</div>
@@ -1183,7 +1183,7 @@
 
         if (response.ok && data.ok) {
           adminToken = data.token;
-          localStorage.setItem('adminToken', adminToken);
+          try { localStorage.setItem('adminToken', adminToken); } catch (e) { console.warn('Storage blocked:', e.message); }
           document.getElementById('loginModal').classList.remove('active');
           document.getElementById('adminPanel').style.display = 'flex';
           loadData();
@@ -1197,7 +1197,8 @@
     });
 
     // Auto-login check
-    const savedToken = localStorage.getItem('adminToken');
+    let savedToken;
+    try { savedToken = localStorage.getItem('adminToken'); } catch (e) { savedToken = null; }
     if (savedToken) {
       adminToken = savedToken;
       document.getElementById('loginModal').classList.remove('active');
@@ -1211,7 +1212,7 @@
         stopAutoRefresh();
       }
       adminToken = null;
-      localStorage.removeItem('adminToken');
+      try { localStorage.removeItem('adminToken'); } catch (e) {}
       document.getElementById('adminPanel').style.display = 'none';
       document.getElementById('loginModal').classList.add('active');
       document.getElementById('adminLoginForm').reset();

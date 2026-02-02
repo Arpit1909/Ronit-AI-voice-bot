@@ -8,6 +8,8 @@
   <meta name="description"
     content="Start your confidential therapy session with Ronit, your compassionate AI therapist">
 
+  <!-- Favicon (prevents 404) -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>">
   <!-- PWA Manifest -->
   <link rel="manifest" href="/manifest.json">
   <meta name="theme-color" content="#065F46">
@@ -1734,8 +1736,13 @@
 
   <!-- Check if user is logged in, redirect to login if not -->
   <script type="module">
-    if (!sessionStorage.getItem('isLoggedIn')) {
-      window.location.href = '/login.html';
+    try {
+      if (!sessionStorage.getItem('isLoggedIn')) {
+        window.location.href = '/login.html';
+      }
+    } catch (e) {
+      console.warn('Storage blocked:', e.message);
+      window.location.href = '/login.html'; // Safe default when storage unavailable
     }
   </script>
 

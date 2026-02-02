@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Sign Up - Ronit AI Coach</title>
-  
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>">
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -152,14 +152,16 @@
         const data = await res.json();
         
         if (data.ok && data.token) {
-            // Store app-generated JWT token
-            sessionStorage.setItem('authToken', data.token);
-            
-            sessionStorage.setItem('userEmail', data.email);
-            sessionStorage.setItem('userName', data.name || data.email.split('@')[0]);
-            sessionStorage.setItem('userTalktime', data.talktime.toString());
-            sessionStorage.setItem('isLoggedIn', 'true');
-            
+            try {
+              sessionStorage.setItem('authToken', data.token);
+              sessionStorage.setItem('userEmail', data.email);
+              sessionStorage.setItem('userName', data.name || data.email.split('@')[0]);
+              sessionStorage.setItem('userTalktime', data.talktime.toString());
+              sessionStorage.setItem('isLoggedIn', 'true');
+            } catch (e) {
+              console.warn('Storage blocked:', e.message);
+              alert('Your browser is blocking storage. Please allow cookies/storage for this site.');
+            }
             window.location.href = '/';
         } else {
             const errorDiv = document.getElementById('signupError');

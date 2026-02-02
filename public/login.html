@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Login - Personal AI Coach</title>
   <meta name="description" content="Login to access your AI coaching session">
-
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>">
   <!-- PWA Manifest -->
   <link rel="manifest" href="/manifest.json">
   <meta name="theme-color" content="#0ea5e9">
@@ -389,16 +389,16 @@
         const data = await res.json();
         
         if (data.ok && data.token) {
-          // Store app-generated JWT token
-          sessionStorage.setItem('authToken', data.token);
-          
-          // Save user data to Session Storage
-          sessionStorage.setItem('userEmail', data.email);
-          sessionStorage.setItem('userName', data.name || data.email.split('@')[0]);
-          sessionStorage.setItem('userTalktime', (data.talktime || 0).toString());
-          sessionStorage.setItem('isLoggedIn', 'true');
-          
-          // Redirect to Home
+          try {
+            sessionStorage.setItem('authToken', data.token);
+            sessionStorage.setItem('userEmail', data.email);
+            sessionStorage.setItem('userName', data.name || data.email.split('@')[0]);
+            sessionStorage.setItem('userTalktime', (data.talktime || 0).toString());
+            sessionStorage.setItem('isLoggedIn', 'true');
+          } catch (e) {
+            console.warn('Storage blocked:', e.message);
+            alert('Your browser is blocking storage. Please allow cookies/storage for this site to stay logged in.');
+          }
           window.location.href = '/';
         } else {
           errorDiv.textContent = data.message || 'Google Sign-In failed. Please try again.';
@@ -441,16 +441,16 @@
         const data = await res.json();
 
         if (data.ok && data.token) {
-          // Store app-generated JWT token
-          sessionStorage.setItem('authToken', data.token);
-
-          // Save user data to Session Storage
-          sessionStorage.setItem('userEmail', data.email);
-          sessionStorage.setItem('userName', data.name || data.email.split('@')[0]);
-          sessionStorage.setItem('userTalktime', (data.talktime || 0).toString());
-          sessionStorage.setItem('isLoggedIn', 'true');
-
-          // Redirect to Home
+          try {
+            sessionStorage.setItem('authToken', data.token);
+            sessionStorage.setItem('userEmail', data.email);
+            sessionStorage.setItem('userName', data.name || data.email.split('@')[0]);
+            sessionStorage.setItem('userTalktime', (data.talktime || 0).toString());
+            sessionStorage.setItem('isLoggedIn', 'true');
+          } catch (e) {
+            console.warn('Storage blocked:', e.message);
+            alert('Your browser is blocking storage. Please allow cookies/storage for this site to stay logged in.');
+          }
           window.location.href = '/';
         } else {
           // Check if error suggests using Google Sign-In

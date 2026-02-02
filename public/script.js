@@ -1,5 +1,16 @@
 import { Conversation } from "https://cdn.jsdelivr.net/npm/@11labs/client/+esm";
 
+// Safe storage: fallback to in-memory when localStorage/sessionStorage is blocked (e.g. iframe, privacy settings)
+const _mem = { session: {}, local: {} };
+function safeSessionStorage() {
+  try { window.sessionStorage.setItem('_test', '1'); window.sessionStorage.removeItem('_test'); return window.sessionStorage; } catch (_) { return { getItem: k => _mem.session[k], setItem: (k, v) => { _mem.session[k] = v; }, removeItem: k => delete _mem.session[k], clear: () => { _mem.session = {}; } }; }
+}
+function safeLocalStorage() {
+  try { window.localStorage.setItem('_test', '1'); window.localStorage.removeItem('_test'); return window.localStorage; } catch (_) { return { getItem: k => _mem.local[k], setItem: (k, v) => { _mem.local[k] = v; }, removeItem: k => { delete _mem.local[k]; }, clear: () => { _mem.local = {}; } }; }
+}
+const sessionStorage = safeSessionStorage();
+const localStorage = safeLocalStorage();
+
 // Authenticated fetch helper that automatically injects JWT token
 // and handles 401 redirects to login page.
 async function authenticatedFetch(url, options = {}) {
