@@ -1080,18 +1080,28 @@ def signup():
     # Check if email is in pending community members list
     is_pending_community = check_pending_community_member(email)
     
+    # Community members get 15 min only; regular users get 3 min welcome bonus
+    now_iso = datetime.now(timezone.utc).isoformat()
+    if is_pending_community:
+        talktime = 900  # 15 minutes (community members get only this, no 3 min on top)
+        last_refill = now_iso
+    else:
+        talktime = 180  # 3 minutes welcome bonus
+        last_refill = None
+    
     # Create user account
     user_data = {
         "email": email,
         "password_hash": password_hash,
-        "talktime": 180,  # 3 minutes free welcome bonus
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "talktime": talktime,
+        "created_at": now_iso,
         "last_login": None,
         "sessions": [],
         "total_sessions": 0,
         "welcome_bonus_given": True,
-        "welcome_bonus_date": datetime.now(timezone.utc).isoformat(),
-        "is_community_member": is_pending_community  # Auto-grant if in pending list
+        "welcome_bonus_date": now_iso,
+        "is_community_member": is_pending_community,
+        "last_community_refill": last_refill  # Set for community members so they don't get extra refill
     }
     
     if name:
@@ -1865,9 +1875,12 @@ def add_community_member():
         response = supabase.table("users").select("*").eq("email", email).execute()
         
         if response.data and len(response.data) > 0:
-            # User exists - promote them directly
+            # User exists - promote them directly with 15 min total (replace, don't add)
+            now_iso = datetime.now(timezone.utc).isoformat()
             supabase.table("users").update({
-                "is_community_member": True
+                "is_community_member": True,
+                "talktime": 900,  # 15 minutes total (community members get only this)
+                "last_community_refill": now_iso
             }).eq("email", email).execute()
             
             # Remove from pending list if they were there
@@ -2230,10 +2243,16 @@ def toggle_vip_endpoint(email: str):
     current_status = user.get("is_community_member", False)
     new_status = not current_status
     
-    update_user(email, {
+    update_data = {
         "is_community_member": new_status,
         "last_community_refill": None if not new_status else user.get("last_community_refill")
-    })
+    }
+    if new_status:
+        # When promoting: give 15 min total (community members get only this)
+        update_data["talktime"] = 900
+        update_data["last_community_refill"] = datetime.now(timezone.utc).isoformat()
+    
+    update_user(email, update_data)
     
     status_msg = "Promoted to Community Member" if new_status else "Removed from Community Member"
     return jsonify({"ok": True, "message": f"{email} {status_msg}", "is_community_member": new_status})
@@ -2387,19 +2406,29 @@ def google_auth():
             # Check if email is in pending community members list
             is_pending_community = check_pending_community_member(email)
             
+            # Community members get 15 min only; regular users get 3 min welcome bonus
+            now_iso = datetime.now(timezone.utc).isoformat()
+            if is_pending_community:
+                talktime = 900  # 15 minutes (community members get only this, no 3 min on top)
+                last_refill = now_iso
+            else:
+                talktime = 180  # 3 minutes welcome bonus
+                last_refill = None
+            
             # New user: Create account with Welcome Bonus
             user_data = {
                 "email": email,
                 "name": name,
                 "password_hash": None,  # Google users don't need a password
-                "talktime": 180,        # 3 Minutes Free Bonus
-                "created_at": datetime.now(timezone.utc).isoformat(),
-                "last_login": datetime.now(timezone.utc).isoformat(),
+                "talktime": talktime,
+                "created_at": now_iso,
+                "last_login": now_iso,
                 "sessions": [],
                 "total_sessions": 0,
                 "welcome_bonus_given": True,
-                "welcome_bonus_date": datetime.now(timezone.utc).isoformat(),
-                "is_community_member": is_pending_community  # Auto-grant if in pending list
+                "welcome_bonus_date": now_iso,
+                "is_community_member": is_pending_community,
+                "last_community_refill": last_refill  # Set for community members so they don't get extra refill
             }
             
             update_user(email, user_data)
@@ -2420,7 +2449,7 @@ def google_auth():
                 "token": app_token,
                 "email": email,
                 "name": name,
-                "talktime": 180
+                "talktime": talktime
             })
             
     except ValueError as e:
