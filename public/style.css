@@ -373,6 +373,8 @@ h1, h2, h3, .btn {
   text-transform: uppercase;
   letter-spacing: 0.5px;
   animation: pulse-badge 2s infinite;
+  white-space: nowrap;
+  flex-wrap: nowrap;
 }
 
 @keyframes pulse-badge {
