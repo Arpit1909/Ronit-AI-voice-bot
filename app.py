@@ -1077,32 +1077,32 @@ def signup():
     # Hash password
     password_hash = generate_password_hash(password)
     
-            # Check if email is in pending community members list
-            is_pending_community = check_pending_community_member(email)
-            
-            # Create user account
-            user_data = {
-                "email": email,
-                "password_hash": password_hash,
-                "talktime": 180,  # 3 minutes free welcome bonus
-                "created_at": datetime.now(timezone.utc).isoformat(),
-                "last_login": None,
-                "sessions": [],
-                "total_sessions": 0,
-                "welcome_bonus_given": True,
-                "welcome_bonus_date": datetime.now(timezone.utc).isoformat(),
-                "is_community_member": is_pending_community  # Auto-grant if in pending list
-            }
-            
-            if name:
-                user_data["name"] = name
-            
-            update_user(email, user_data)
-            
-            # Remove from pending list if they were there
-            if is_pending_community:
-                remove_from_pending_list(email)
-                logger.info(f"✅ Auto-granted community member status to {email} (was in pending list)")
+    # Check if email is in pending community members list
+    is_pending_community = check_pending_community_member(email)
+    
+    # Create user account
+    user_data = {
+        "email": email,
+        "password_hash": password_hash,
+        "talktime": 180,  # 3 minutes free welcome bonus
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "last_login": None,
+        "sessions": [],
+        "total_sessions": 0,
+        "welcome_bonus_given": True,
+        "welcome_bonus_date": datetime.now(timezone.utc).isoformat(),
+        "is_community_member": is_pending_community  # Auto-grant if in pending list
+    }
+    
+    if name:
+        user_data["name"] = name
+    
+    update_user(email, user_data)
+    
+    # Remove from pending list if they were there
+    if is_pending_community:
+        remove_from_pending_list(email)
+        logger.info(f"✅ Auto-granted community member status to {email} (was in pending list)")
     
     # Generate JWT token for new user
     app_token = create_token(email)
