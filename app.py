@@ -1077,23 +1077,32 @@ def signup():
     # Hash password
     password_hash = generate_password_hash(password)
     
-    # Create user account
-    user_data = {
-        "email": email,
-        "password_hash": password_hash,
-        "talktime": 180,  # 3 minutes free welcome bonus
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "last_login": None,
-        "sessions": [],
-        "total_sessions": 0,
-        "welcome_bonus_given": True,
-        "welcome_bonus_date": datetime.now(timezone.utc).isoformat()
-    }
-    
-    if name:
-        user_data["name"] = name
-    
-    update_user(email, user_data)
+            # Check if email is in pending community members list
+            is_pending_community = check_pending_community_member(email)
+            
+            # Create user account
+            user_data = {
+                "email": email,
+                "password_hash": password_hash,
+                "talktime": 180,  # 3 minutes free welcome bonus
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "last_login": None,
+                "sessions": [],
+                "total_sessions": 0,
+                "welcome_bonus_given": True,
+                "welcome_bonus_date": datetime.now(timezone.utc).isoformat(),
+                "is_community_member": is_pending_community  # Auto-grant if in pending list
+            }
+            
+            if name:
+                user_data["name"] = name
+            
+            update_user(email, user_data)
+            
+            # Remove from pending list if they were there
+            if is_pending_community:
+                remove_from_pending_list(email)
+                logger.info(f"✅ Auto-granted community member status to {email} (was in pending list)")
     
     # Generate JWT token for new user
     app_token = create_token(email)
@@ -1126,10 +1135,11 @@ def login():
     if not user:
         raise AppError("No account found with this email. Please sign up first.", status_code=404)
     
-    # Check if user has a password (signed up)
+    # Check if user has a password (signed up with email/password)
     password_hash = user.get("password_hash")
     if not password_hash:
-        raise AppError("No account found with this email. Please sign up first.", status_code=404)
+        # User exists but signed up with Google - they need to use Google Sign-In
+        raise AppError("This account was created with Google Sign-In. Please use the 'Sign in with Google' button to login.", status_code=403)
     
     # Verify password
     if not check_password_hash(password_hash, password):
@@ -1823,10 +1833,27 @@ def verify_admin_token():
 # ADMIN: COMMUNITY MEMBER MANAGEMENT
 # ==========================================
 
+def check_pending_community_member(email: str) -> bool:
+    """Check if email is in pending community members list."""
+    try:
+        response = supabase.table("pending_community_members").select("*").eq("email", email).execute()
+        return len(response.data) > 0 if response.data else False
+    except Exception as e:
+        logger.error(f"Error checking pending community member: {e}")
+        return False
+
+def remove_from_pending_list(email: str):
+    """Remove email from pending community members list."""
+    try:
+        supabase.table("pending_community_members").delete().eq("email", email).execute()
+        logger.info(f"Removed {email} from pending community members")
+    except Exception as e:
+        logger.error(f"Error removing from pending list: {e}")
+
 @app.post("/api/admin/community/add")
 @limiter.limit("50 per hour")
 def add_community_member():
-    """Promote a user to Community Member."""
+    """Promote a user to Community Member. If user doesn't exist, add to pending list."""
     verify_admin_token()
     data = request.get_json(silent=True) or {}
     email = (data.get("email") or "").strip().lower()
@@ -1836,18 +1863,78 @@ def add_community_member():
     
     try:
         response = supabase.table("users").select("*").eq("email", email).execute()
-        if not response.data:
-            raise AppError("User not found", status_code=404)
         
-        supabase.table("users").update({
-            "is_community_member": True
-        }).eq("email", email).execute()
-        
-        return jsonify({"ok": True, "message": f"{email} is now a Community Member!"})
+        if response.data and len(response.data) > 0:
+            # User exists - promote them directly
+            supabase.table("users").update({
+                "is_community_member": True
+            }).eq("email", email).execute()
+            
+            # Remove from pending list if they were there
+            remove_from_pending_list(email)
+            
+            return jsonify({"ok": True, "message": f"{email} is now a Community Member!"})
+        else:
+            # User doesn't exist - add to pending list
+            try:
+                supabase.table("pending_community_members").insert({
+                    "email": email,
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                    "created_by": "admin",  # Could get from admin token if needed
+                    "notes": "Pre-approved for community member status"
+                }).execute()
+                
+                logger.info(f"Added {email} to pending community members list")
+                return jsonify({
+                    "ok": True, 
+                    "message": f"{email} added to pending list. They will become a Community Member when they sign up!",
+                    "pending": True
+                })
+            except Exception as e:
+                # Check if already in pending list
+                if check_pending_community_member(email):
+                    return jsonify({
+                        "ok": True,
+                        "message": f"{email} is already in the pending list.",
+                        "pending": True
+                    })
+                raise AppError("Failed to add to pending list", status_code=500)
+                
     except AppError:
         raise
     except Exception as e:
         logger.error(f"Error adding community member: {e}")
+        raise AppError("Database error", status_code=500)
+
+@app.get("/api/admin/community/pending")
+@limiter.limit("50 per hour")
+def list_pending_community_members():
+    """List all pending community members."""
+    verify_admin_token()
+    try:
+        response = supabase.table("pending_community_members").select("*").order("created_at", desc=True).execute()
+        pending_list = response.data if response.data else []
+        return jsonify({"ok": True, "pending": pending_list})
+    except Exception as e:
+        logger.error(f"Error listing pending community members: {e}")
+        raise AppError("Database error", status_code=500)
+
+@app.delete("/api/admin/community/pending/<path:email>")
+@limiter.limit("50 per hour")
+def remove_pending_community_member(email: str):
+    """Remove an email from pending community members list."""
+    verify_admin_token()
+    from urllib.parse import unquote
+    email = unquote(email).strip().lower()
+    
+    if not validate_email(email):
+        raise AppError("Invalid email", status_code=400)
+    
+    try:
+        remove_from_pending_list(email)
+        return jsonify({"ok": True, "message": f"{email} removed from pending list."})
+    except Exception as e:
+        logger.error(f"Error removing pending community member: {e}")
         raise AppError("Database error", status_code=500)
 
 @app.post("/api/admin/community/remove")
@@ -2297,6 +2384,9 @@ def google_auth():
                 "talktime": user.get("talktime", 0)
             })
         else:
+            # Check if email is in pending community members list
+            is_pending_community = check_pending_community_member(email)
+            
             # New user: Create account with Welcome Bonus
             user_data = {
                 "email": email,
@@ -2308,10 +2398,17 @@ def google_auth():
                 "sessions": [],
                 "total_sessions": 0,
                 "welcome_bonus_given": True,
-                "welcome_bonus_date": datetime.now(timezone.utc).isoformat()
+                "welcome_bonus_date": datetime.now(timezone.utc).isoformat(),
+                "is_community_member": is_pending_community  # Auto-grant if in pending list
             }
             
             update_user(email, user_data)
+            
+            # Remove from pending list if they were there
+            if is_pending_community:
+                remove_from_pending_list(email)
+                logger.info(f"✅ Auto-granted community member status to {email} (was in pending list)")
+            
             logger.info(f"New Google user signed up: {email}")
             
             # Generate app JWT token

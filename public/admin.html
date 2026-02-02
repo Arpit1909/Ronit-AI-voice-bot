@@ -244,6 +244,12 @@
       transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
       font-family: 'Inter', sans-serif;
       box-shadow: var(--shadow-sm);
+      word-wrap: break-word;
+      word-break: break-word;
+      overflow-wrap: break-word;
+      text-align: center;
+      justify-content: center;
+      min-width: 0;
     }
 
     .btn:hover {
@@ -442,6 +448,14 @@
       font-size: 1rem;
       letter-spacing: 0.02em;
       white-space: nowrap;
+      flex-shrink: 0;
+    }
+    
+    @media (max-width: 640px) {
+      .input-grp button {
+        font-size: 0.875rem;
+        padding: 0 1.5rem;
+      }
     }
 
     /* --- Table --- */
@@ -513,6 +527,10 @@
       font-size: 0.9375rem;
       vertical-align: middle;
       color: var(--text-secondary);
+      word-wrap: break-word;
+      word-break: break-word;
+      overflow-wrap: break-word;
+      max-width: 0;
     }
 
     tbody tr {
@@ -533,12 +551,16 @@
       display: inline-flex;
       align-items: center;
       gap: 0.5rem;
-      white-space: nowrap;
       vertical-align: middle;
       font-size: 0.8125rem;
       font-weight: 600;
       letter-spacing: 0.02em;
       border: 1px solid transparent;
+      max-width: 100%;
+      word-wrap: break-word;
+      word-break: break-word;
+      overflow-wrap: break-word;
+      flex-wrap: wrap;
     }
 
     .badge.online {
@@ -565,6 +587,10 @@
     
     .badge.vip span {
       line-height: 1.2;
+      word-wrap: break-word;
+      word-break: break-word;
+      overflow-wrap: break-word;
+      min-width: 0;
     }
 
     /* --- Login Modal --- */
@@ -590,13 +616,34 @@
     .modal-box {
       background: linear-gradient(135deg, var(--bg-surface) 0%, var(--bg-surface-elevated) 100%);
       border: 1px solid var(--border-color);
-      width: 100%;
-      max-width: 440px;
-      padding: 3rem;
+      width: calc(100% - 2rem);
+      max-width: 500px;
+      padding: 2.5rem;
       border-radius: 1.5rem;
       box-shadow: var(--shadow-xl);
       position: relative;
       overflow: hidden;
+      margin: 1rem;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-sizing: border-box;
+    }
+    
+    .modal-box h3,
+    .modal-box h4 {
+      word-wrap: break-word;
+      overflow-wrap: break-word;
+      word-break: break-word;
+    }
+    
+    #modalBody {
+      word-wrap: break-word;
+      overflow-wrap: break-word;
+    }
+    
+    #modalBody > div {
+      word-wrap: break-word;
+      overflow-wrap: break-word;
     }
 
     .modal-box::before {
@@ -676,6 +723,11 @@
       .content-wrapper {
         padding: 2rem;
       }
+      
+      .modal-box {
+        max-width: 90%;
+        padding: 2rem;
+      }
     }
 
     @media (max-width: 1024px) {
@@ -709,11 +761,31 @@
 
       .filters {
         width: 100%;
+        flex-wrap: wrap;
       }
 
       .filters input,
       .filters select {
         flex: 1;
+        min-width: 200px;
+      }
+      
+      table {
+        font-size: 0.875rem;
+      }
+      
+      th, td {
+        padding: 1rem 1rem;
+      }
+      
+      .badge {
+        font-size: 0.75rem;
+        padding: 0.3rem 0.7rem;
+      }
+      
+      .modal-box {
+        max-width: 95%;
+        padding: 1.75rem;
       }
     }
 
@@ -730,6 +802,15 @@
 
       .stats-grid {
         grid-template-columns: 1fr;
+        gap: 1.25rem;
+      }
+      
+      .card {
+        padding: 1.5rem;
+      }
+      
+      .stat-value {
+        font-size: 2rem;
       }
 
       .content-wrapper {
@@ -738,6 +819,107 @@
 
       .top-header {
         padding: 0 1.5rem;
+        height: 70px;
+      }
+      
+      .page-title {
+        font-size: 1.25rem;
+      }
+      
+      .table-container {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+      }
+      
+      table {
+        font-size: 0.8125rem;
+        min-width: 600px;
+      }
+      
+      th, td {
+        padding: 0.75rem 0.5rem;
+        font-size: 0.8rem;
+      }
+      
+      td {
+        max-width: 150px;
+      }
+      
+      .badge {
+        font-size: 0.65rem;
+        padding: 0.2rem 0.5rem;
+      }
+      
+      .badge.vip span {
+        font-size: 0.65rem;
+      }
+      
+      .badge {
+        font-size: 0.7rem;
+        padding: 0.25rem 0.6rem;
+        display: inline-block;
+        width: auto;
+      }
+      
+      .vip-manager {
+        padding: 1.5rem;
+      }
+      
+      .input-grp {
+        flex-direction: column;
+      }
+      
+      .input-grp input {
+        border-radius: 0.75rem;
+        border-right: 1px solid var(--border-color);
+      }
+      
+      .input-grp button {
+        border-radius: 0.75rem;
+        width: 100%;
+        padding: 1rem;
+      }
+      
+      .modal-box {
+        max-width: 95%;
+        padding: 1.5rem;
+        margin: 0.5rem;
+        max-height: 95vh;
+      }
+      
+      .modal-box h3 {
+        font-size: 1.25rem;
+      }
+    }
+    
+    @media (max-width: 480px) {
+      .content-wrapper {
+        padding: 1rem;
+      }
+      
+      .stats-grid {
+        gap: 1rem;
+      }
+      
+      .card {
+        padding: 1.25rem;
+      }
+      
+      .stat-value {
+        font-size: 1.75rem;
+      }
+      
+      .stat-label {
+        font-size: 0.75rem;
+      }
+      
+      .modal-box {
+        padding: 1.25rem;
+      }
+      
+      .btn {
+        padding: 0.625rem 1rem;
+        font-size: 0.875rem;
       }
     }
   </style>
@@ -847,16 +1029,31 @@
       <div class="vip-manager">
         <div class="vip-info">
           <h2><i class="fas fa-crown" style="color: var(--warning);"></i> Community Access</h2>
-          <p>Instantly grant Community Member status to a user. This includes priority queuing, extended talk time, and premium
-            features.</p>
+          <p>Grant Community Member status to users. You can add emails even if they haven't signed up yet - they'll automatically become Community Members when they create an account.</p>
         </div>
         <div class="vip-actions">
           <div class="input-grp">
-            <input type="email" id="communityEmailInput" placeholder="Enter Gmail address..." aria-label="User Email">
+            <input type="email" id="communityEmailInput" placeholder="Enter email address..." aria-label="User Email">
             <button class="btn btn-primary" onclick="quickAddCommunity()">PROMOTE USER</button>
           </div>
           <div style="font-size: 0.8rem; color: var(--text-muted); padding-left: 5px;">
-            <i class="fas fa-check-circle" style="color: var(--success); margin-right: 4px;"></i> Instant Activation
+            <i class="fas fa-check-circle" style="color: var(--success); margin-right: 4px;"></i> Works for existing users and pending signups
+          </div>
+        </div>
+      </div>
+
+      <!-- Pending Community Members -->
+      <div class="card" id="pendingCommunitySection" style="margin-bottom: 2.5rem; display: none;">
+        <div class="stat-label" style="margin-bottom: 1.5rem;">
+          <span><i class="fas fa-clock" style="margin-right: 0.5rem; color: var(--warning);"></i>Pending Community Members</span>
+          <button class="btn" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;" onclick="loadPendingCommunityMembers()">
+            <i class="fas fa-sync-alt"></i> Refresh
+          </button>
+        </div>
+        <div id="pendingCommunityList" style="min-height: 50px;">
+          <div style="text-align: center; color: var(--text-muted); padding: 2rem;">
+            <i class="fas fa-spinner fa-spin" style="font-size: 1.5rem; margin-bottom: 0.5rem;"></i>
+            <div>Loading pending members...</div>
           </div>
         </div>
       </div>
@@ -1019,6 +1216,9 @@
         if (stats.ok && users.ok && allUsers.length > 0) {
           updateCharts(stats.stats);
         }
+
+        // Load pending community members
+        loadPendingCommunityMembers();
 
       } catch (error) {
         showAlert('System Sync Error: ' + error.message, 'error');
@@ -1196,13 +1396,13 @@
 
         return `
         <tr>
-          <td>${statusBadge}</td>
-          <td>${vipBadge}</td>
-          <td style="font-weight: 500; font-family:'Outfit';">${user.email}</td>
-          <td>${formatTalktime(user.talktime)}</td>
-          <td>${user.total_sessions}</td>
-          <td style="color: var(--text-muted); font-size: 0.85rem;">${getTimeAgo(user.last_login)}</td>
-          <td style="text-align: right;">
+          <td data-label="Status">${statusBadge}</td>
+          <td data-label="Rank">${vipBadge}</td>
+          <td data-label="Identity" style="font-weight: 500; font-family:'Outfit'; word-break:break-all; overflow-wrap:break-word; max-width:200px;">${user.email}</td>
+          <td data-label="Balance">${formatTalktime(user.talktime)}</td>
+          <td data-label="Sessions">${user.total_sessions}</td>
+          <td data-label="Last Seen" style="color: var(--text-muted); font-size: 0.85rem;">${getTimeAgo(user.last_login)}</td>
+          <td data-label="Action" style="text-align: right;">
             <button class="btn" style="padding:0.4rem; border:none;" onclick="showUserDetails('${user.email}')"><i class="fas fa-ellipsis-v"></i></button>
           </td>
         </tr>
@@ -1239,9 +1439,81 @@
           body: JSON.stringify({ email })
         });
         const data = await res.json();
-        if (data.ok) { showAlert(`Success! ${email} promoted.`, 'success'); emailInput.value = ''; loadData(); }
-        else { showAlert(data.message || 'Action failed', 'error'); }
+        if (data.ok) {
+          if (data.pending) {
+            showAlert(data.message || `Success! ${email} added to pending list.`, 'success');
+          } else {
+            showAlert(data.message || `Success! ${email} promoted.`, 'success');
+          }
+          emailInput.value = '';
+          loadData();
+          loadPendingCommunityMembers(); // Refresh pending list
+        } else {
+          showAlert(data.message || 'Action failed', 'error');
+        }
       } catch (e) { showAlert(e.message, 'error'); }
+    }
+
+    // --- Pending Community Members ---
+    async function loadPendingCommunityMembers() {
+      if (!adminToken) return;
+      
+      try {
+        const res = await fetch('/api/admin/community/pending', {
+          headers: { 'Authorization': `Bearer ${adminToken}` }
+        });
+        
+        if (res.status === 401) { logout(); return; }
+        
+        const data = await res.json();
+        const pendingList = document.getElementById('pendingCommunityList');
+        const pendingSection = document.getElementById('pendingCommunitySection');
+        
+        if (data.ok && data.pending && data.pending.length > 0) {
+          pendingSection.style.display = 'block';
+          pendingList.innerHTML = data.pending.map(item => {
+            const createdDate = item.created_at ? new Date(item.created_at).toLocaleDateString() : 'Unknown';
+            return `
+              <div style="display: flex; justify-content: space-between; align-items: center; padding: 1rem; background: var(--bg-body); border-radius: 0.625rem; margin-bottom: 0.75rem; border: 1px solid var(--border-color);">
+                <div style="flex: 1; word-break: break-all; overflow-wrap: break-word;">
+                  <div style="font-weight: 600; color: var(--text-main); margin-bottom: 0.25rem;">${item.email}</div>
+                  <div style="font-size: 0.8rem; color: var(--text-muted);">Added: ${createdDate}</div>
+                </div>
+                <button class="btn" style="padding: 0.5rem 1rem; margin-left: 1rem; border-color: var(--danger); color: var(--danger);" onclick="removePendingCommunity('${item.email.replace(/'/g, "\\'")}')">
+                  <i class="fas fa-times"></i> Remove
+                </button>
+              </div>
+            `;
+          }).join('');
+        } else {
+          pendingSection.style.display = 'none';
+        }
+      } catch (error) {
+        console.error('Error loading pending community members:', error);
+      }
+    }
+
+    async function removePendingCommunity(email) {
+      if (!confirm(`Remove ${email} from pending community members list?`)) return;
+      
+      try {
+        const res = await fetch(`/api/admin/community/pending/${encodeURIComponent(email)}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${adminToken}` }
+        });
+        
+        if (res.status === 401) { logout(); return; }
+        
+        const data = await res.json();
+        if (data.ok) {
+          showAlert(data.message || 'Removed from pending list', 'success');
+          loadPendingCommunityMembers();
+        } else {
+          showAlert(data.message || 'Failed to remove', 'error');
+        }
+      } catch (e) {
+        showAlert(e.message, 'error');
+      }
     }
 
     async function deleteUser(email) {
@@ -1264,35 +1536,35 @@
       modal.classList.add('active');
 
       body.innerHTML = `
-        <div style="background:var(--bg-body); padding:1rem; border-radius:0.5rem; margin-bottom:1rem;">
-           <div style="color:var(--text-muted); font-size:0.8rem; text-transform:uppercase;">Identity</div>
-           <div style="font-size:1.1rem; font-weight:600;">${user.email}</div>
+        <div style="background:var(--bg-body); padding:1rem; border-radius:0.5rem; margin-bottom:1rem; word-wrap:break-word; overflow-wrap:break-word;">
+           <div style="color:var(--text-muted); font-size:0.8rem; text-transform:uppercase; margin-bottom:0.5rem;">Identity</div>
+           <div style="font-size:1.1rem; font-weight:600; word-break:break-all; overflow-wrap:break-word;">${user.email}</div>
         </div>
         
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1.5rem;">
            <div style="background:var(--bg-body); padding:1rem; border-radius:0.5rem;">
-              <div style="color:var(--text-muted); font-size:0.8rem;">Balance</div>
-              <div style="color:var(--success); font-weight:700;">${formatTalktime(user.talktime)}</div>
+              <div style="color:var(--text-muted); font-size:0.8rem; margin-bottom:0.5rem;">Balance</div>
+              <div style="color:var(--success); font-weight:700; font-size:1.1rem;">${formatTalktime(user.talktime)}</div>
            </div>
            <div style="background:var(--bg-body); padding:1rem; border-radius:0.5rem;">
-              <div style="color:var(--text-muted); font-size:0.8rem;">Sessions</div>
-              <div style="color:var(--brand-primary); font-weight:700;">${user.total_sessions}</div>
+              <div style="color:var(--text-muted); font-size:0.8rem; margin-bottom:0.5rem;">Sessions</div>
+              <div style="color:var(--brand-primary); font-weight:700; font-size:1.1rem;">${user.total_sessions}</div>
            </div>
         </div>
         
         <div style="display:flex; flex-direction:column; gap:0.5rem;">
-           <button class="btn btn-primary" style="justify-content:center;" onclick="openTalktimeModal('${user.email}')">Add Talktime</button>
+           <button class="btn btn-primary" style="justify-content:center; width:100%;" onclick="openTalktimeModal('${user.email}')">Add Talktime</button>
            
-           <div style="display:flex; gap:0.5rem;">
-             <button class="btn" style="flex:1; justify-content:center; border-color:var(--warning); color:var(--warning);" onclick="resetTalkTime('${user.email}')">
-               <i class="fas fa-undo"></i> Reset Time
+           <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+             <button class="btn" style="flex:1; min-width:120px; justify-content:center; border-color:var(--warning); color:var(--warning);" onclick="resetTalkTime('${user.email}')">
+               <i class="fas fa-undo"></i> <span>Reset Time</span>
              </button>
-             <button class="btn" style="flex:1; justify-content:center; border-color:${user.is_community_member ? 'var(--text-muted)' : 'var(--brand-primary)'}; color:${user.is_community_member ? 'var(--text-muted)' : 'var(--brand-primary)'};" onclick="toggleVIP('${user.email}')">
-               <i class="${user.is_community_member ? 'fas fa-user-minus' : 'fas fa-crown'}"></i> ${user.is_community_member ? 'Remove Community Member' : 'Make Community Member'}
+             <button class="btn" style="flex:1; min-width:120px; justify-content:center; border-color:${user.is_community_member ? 'var(--text-muted)' : 'var(--brand-primary)'}; color:${user.is_community_member ? 'var(--text-muted)' : 'var(--brand-primary)'};" onclick="toggleVIP('${user.email}')">
+               <i class="${user.is_community_member ? 'fas fa-user-minus' : 'fas fa-crown'}"></i> <span>${user.is_community_member ? 'Remove Community Member' : 'Make Community Member'}</span>
              </button>
            </div>
 
-           <button class="btn" style="justify-content:center; color:var(--danger); border-color:rgba(239,68,68,0.3); margin-top:0.5rem;" onclick="deleteUser('${user.email}')">Delete User</button>
+           <button class="btn" style="justify-content:center; width:100%; color:var(--danger); border-color:rgba(239,68,68,0.3); margin-top:0.5rem;" onclick="deleteUser('${user.email}')">Delete User</button>
         </div>
       `;
     }
@@ -1300,11 +1572,11 @@
     function openTalktimeModal(email) {
       const body = document.getElementById('modalBody');
       body.innerHTML = `
-          <h4 style="margin-bottom:1rem;">Add Credits to ${email}</h4>
-          <input type="number" id="talktimeAmount" class="btn" style="width:100%; cursor:text; margin-bottom:1rem; background:var(--bg-body);" placeholder="Seconds (e.g. 600)">
-          <div style="display:flex; gap:1rem;">
-             <button class="btn btn-primary" style="flex:1; justify-content:center;" onclick="updateTalktime('${email}')">Confirm</button>
-             <button class="btn" style="flex:1; justify-content:center;" onclick="showUserDetails('${email}')">Back</button>
+          <h4 style="margin-bottom:1rem; word-wrap:break-word; overflow-wrap:break-word;">Add Credits to <span style="word-break:break-all;">${email}</span></h4>
+          <input type="number" id="talktimeAmount" class="btn" style="width:100%; cursor:text; margin-bottom:1rem; background:var(--bg-body); padding:1rem; border:1px solid var(--border-color); border-radius:0.625rem;" placeholder="Seconds (e.g. 600)">
+          <div style="display:flex; gap:1rem; flex-wrap:wrap;">
+             <button class="btn btn-primary" style="flex:1; min-width:120px; justify-content:center;" onclick="updateTalktime('${email}')">Confirm</button>
+             <button class="btn" style="flex:1; min-width:120px; justify-content:center;" onclick="showUserDetails('${email}')">Back</button>
           </div>
        `;
     }

@@ -2241,14 +2241,8 @@ async function endSession() {
     }
   }
 
-  // [FIX] Fast, smooth redirect - show alert briefly then immediate reload
-  alert("Call ended! Your personalized care plan is being sent to your email. Please check your inbox in a few minutes.");
-  
-  // Immediate redirect for rapid, smooth reload
-  // Use location.reload() for faster refresh (preserves current page state better)
-  setTimeout(() => {
-    window.location.reload();
-  }, 50); // Minimal delay for smooth transition
+  // Direct reload after call ends - no notification
+  window.location.reload();
 }
 
 // --- REAL-TIME TEXT STATUS ENGINE ---

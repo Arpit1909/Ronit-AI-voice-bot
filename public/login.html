@@ -237,6 +237,15 @@
       }
     }
 
+    @keyframes pulse {
+      0%, 100% {
+        transform: scale(1);
+      }
+      50% {
+        transform: scale(1.02);
+      }
+    }
+
     .error-message::before {
       content: '⚠️ ';
       margin-right: 8px;
@@ -287,7 +296,12 @@
 
       <div id="loginError" class="error-message"></div>
 
-      <!-- Manual Login Form (Restored for Local Testing) -->
+      <!-- Google Sign-In Button -->
+      <div class="google-signin-container" id="googleSignInContainer" style="display: none;">
+        <div id="google-signin-button"></div>
+      </div>
+
+      <!-- Manual Login Form -->
       <form id="manualLoginForm" class="login-form">
         <div class="form-group">
           <label for="email">Email Address</label>
@@ -304,6 +318,11 @@
         </button>
       </form>
 
+      <!-- Divider (only show if Google Sign-In is available) -->
+      <div class="divider" id="loginDivider" style="display: none;">
+        <span>OR</span>
+      </div>
+
       <div class="signup-link">
         Don't have an account? <a href="/signup.html" id="signupLink">Sign Up</a>
       </div>
@@ -319,6 +338,79 @@
   </footer>
 
   <script>
+    let GOOGLE_CLIENT_ID = '';
+    
+    // Load Google Client ID and initialize
+    async function loadGoogleClientId() {
+      try {
+        const response = await fetch('/config');
+        const config = await response.json();
+        if (config.googleClientId) {
+          GOOGLE_CLIENT_ID = config.googleClientId;
+          initializeGoogleSignIn();
+        }
+      } catch (error) {
+        console.error('Config Error:', error);
+      }
+    }
+    
+    // Initialize Google Sign-In Button
+    function initializeGoogleSignIn() {
+      if (typeof google === 'undefined' || !GOOGLE_CLIENT_ID) return;
+      
+      google.accounts.id.initialize({
+        client_id: GOOGLE_CLIENT_ID,
+        callback: handleGoogleLogin
+      });
+      
+      google.accounts.id.renderButton(
+        document.getElementById('google-signin-button'),
+        { theme: 'outline', size: 'large', text: 'signin_with', width: '280' }
+      );
+      
+      // Show Google Sign-In button and divider
+      document.getElementById('googleSignInContainer').style.display = 'flex';
+      document.getElementById('loginDivider').style.display = 'flex';
+    }
+    
+    // Handle Google Sign-In
+    async function handleGoogleLogin(response) {
+      const errorDiv = document.getElementById('loginError');
+      
+      try {
+        const res = await fetch('/api/auth/google', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            credential: response.credential
+          })
+        });
+        
+        const data = await res.json();
+        
+        if (data.ok && data.token) {
+          // Store app-generated JWT token
+          sessionStorage.setItem('authToken', data.token);
+          
+          // Save user data to Session Storage
+          sessionStorage.setItem('userEmail', data.email);
+          sessionStorage.setItem('userName', data.name || data.email.split('@')[0]);
+          sessionStorage.setItem('userTalktime', (data.talktime || 0).toString());
+          sessionStorage.setItem('isLoggedIn', 'true');
+          
+          // Redirect to Home
+          window.location.href = '/';
+        } else {
+          errorDiv.textContent = data.message || 'Google Sign-In failed. Please try again.';
+          errorDiv.style.display = 'block';
+        }
+      } catch (error) {
+        console.error('Google Login Error:', error);
+        errorDiv.textContent = 'Connection error during Google Sign-In. Please try again.';
+        errorDiv.style.display = 'block';
+      }
+    }
+
     // Manual Login Handler
     document.getElementById('manualLoginForm').addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -361,8 +453,18 @@
           // Redirect to Home
           window.location.href = '/';
         } else {
-          errorDiv.textContent = data.message || 'Login failed. Please check your credentials.';
-          errorDiv.style.display = 'block';
+          // Check if error suggests using Google Sign-In
+          if (data.message && data.message.includes('Google Sign-In')) {
+            errorDiv.textContent = data.message;
+            errorDiv.style.display = 'block';
+            // Optionally highlight Google Sign-In button
+            if (document.getElementById('googleSignInContainer').style.display !== 'none') {
+              document.getElementById('googleSignInContainer').style.animation = 'pulse 2s ease-in-out';
+            }
+          } else {
+            errorDiv.textContent = data.message || 'Login failed. Please check your credentials.';
+            errorDiv.style.display = 'block';
+          }
         }
       } catch (error) {
         console.error('Login Error:', error);
@@ -376,6 +478,8 @@
 
     // Check for signup success message
     window.addEventListener('load', () => {
+      loadGoogleClientId();
+      
       const urlParams = new URLSearchParams(window.location.search);
       if (urlParams.get('signup') === 'success') {
         const errorDiv = document.getElementById('loginError');
