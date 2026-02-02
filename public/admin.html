@@ -1510,12 +1510,16 @@
         const pendingList = document.getElementById('pendingCommunityList');
         const pendingSection = document.getElementById('pendingCommunitySection');
         
-        if (data.ok && data.pending && data.pending.length > 0) {
+        if (data.ok && data.pending) {
           pendingSection.style.display = 'block';
-          pendingList.innerHTML = data.pending.map(item => {
-            const createdDate = item.created_at ? new Date(item.created_at).toLocaleDateString() : 'Unknown';
-            return `
-              <div style="display: flex; justify-content: space-between; align-items: center; padding: 1rem; background: var(--bg-body); border-radius: 0.625rem; margin-bottom: 0.75rem; border: 1px solid var(--border-color);">
+          let html = '';
+          if (data.warning) {
+            html += `<div style="padding: 1rem; margin-bottom: 1rem; color: var(--warning); font-size: 0.9rem; background: rgba(245, 158, 11, 0.1); border-radius: 0.5rem; border: 1px solid rgba(245, 158, 11, 0.3);"><i class="fas fa-exclamation-triangle"></i> ${data.warning}</div>`;
+          }
+          if (data.pending.length > 0) {
+            html += data.pending.map(item => {
+              const createdDate = item.created_at ? new Date(item.created_at).toLocaleDateString() : 'Unknown';
+              return `<div style="display: flex; justify-content: space-between; align-items: center; padding: 1rem; background: var(--bg-body); border-radius: 0.625rem; margin-bottom: 0.75rem; border: 1px solid var(--border-color);">
                 <div style="flex: 1; word-break: break-all; overflow-wrap: break-word;">
                   <div style="font-weight: 600; color: var(--text-main); margin-bottom: 0.25rem;">${item.email}</div>
                   <div style="font-size: 0.8rem; color: var(--text-muted);">Added: ${createdDate}</div>
@@ -1523,9 +1527,12 @@
                 <button class="btn" style="padding: 0.5rem 1rem; margin-left: 1rem; border-color: var(--danger); color: var(--danger);" onclick="removePendingCommunity('${item.email.replace(/'/g, "\\'")}')">
                   <i class="fas fa-times"></i> Remove
                 </button>
-              </div>
-            `;
-          }).join('');
+              </div>`;
+            }).join('');
+          } else if (!data.warning) {
+            html = '<div style="text-align: center; color: var(--text-muted); padding: 2rem;">No pending community members.</div>';
+          }
+          pendingList.innerHTML = html;
         } else {
           pendingSection.style.display = 'none';
         }

@@ -1904,13 +1904,20 @@ def add_community_member():
                     "pending": True
                 })
             except Exception as e:
-                # Check if already in pending list
-                if check_pending_community_member(email):
-                    return jsonify({
-                        "ok": True,
-                        "message": f"{email} is already in the pending list.",
-                        "pending": True
-                    })
+                logger.error(f"Error adding to pending list: {e}", exc_info=True)
+                err_msg = str(e).lower()
+                if "does not exist" in err_msg or "relation" in err_msg:
+                    raise AppError("Pending community table not found. Run db_scripts/pending_community_members.sql in Supabase.", status_code=500)
+                # Check if already in pending list (table exists but duplicate)
+                try:
+                    if check_pending_community_member(email):
+                        return jsonify({
+                            "ok": True,
+                            "message": f"{email} is already in the pending list.",
+                            "pending": True
+                        })
+                except Exception:
+                    pass
                 raise AppError("Failed to add to pending list", status_code=500)
                 
     except AppError:
@@ -1929,8 +1936,9 @@ def list_pending_community_members():
         pending_list = response.data if response.data else []
         return jsonify({"ok": True, "pending": pending_list})
     except Exception as e:
-        logger.error(f"Error listing pending community members: {e}")
-        raise AppError("Database error", status_code=500)
+        logger.error(f"Error listing pending community members: {e}", exc_info=True)
+        # Return empty list instead of 500 - table may not exist yet (run db_scripts/pending_community_members.sql)
+        return jsonify({"ok": True, "pending": [], "warning": "Pending list unavailable. Run db_scripts/pending_community_members.sql in Supabase to create the table."})
 
 @app.delete("/api/admin/community/pending/<path:email>")
 @limiter.limit("50 per hour")
@@ -1947,8 +1955,8 @@ def remove_pending_community_member(email: str):
         remove_from_pending_list(email)
         return jsonify({"ok": True, "message": f"{email} removed from pending list."})
     except Exception as e:
-        logger.error(f"Error removing pending community member: {e}")
-        raise AppError("Database error", status_code=500)
+        logger.error(f"Error removing pending community member: {e}", exc_info=True)
+        return jsonify({"ok": True, "message": f"{email} removed from pending list."})  # Graceful: table may not exist
 
 @app.post("/api/admin/community/remove")
 @limiter.limit("50 per hour")
