@@ -1066,6 +1066,11 @@
           </div>
           <div class="filters">
             <input type="text" id="searchInput" placeholder="Search users..." oninput="filterUsers()">
+            <select id="rankFilter" onchange="filterUsers()">
+              <option value="all">All Users</option>
+              <option value="community">Community Members</option>
+              <option value="regular">Regular Users</option>
+            </select>
             <select id="sortFilter" onchange="filterUsers()">
               <option value="last_login">Sort: Recent</option>
               <option value="talktime">Sort: Balance</option>
@@ -1358,7 +1363,14 @@
     // --- Table & Filtering ---
     function filterUsers() {
       const searchTerm = document.getElementById('searchInput').value.toLowerCase();
-      filteredUsers = allUsers.filter(user => user.email.toLowerCase().includes(searchTerm));
+      const rankFilter = document.getElementById('rankFilter').value;
+      filteredUsers = allUsers.filter(user => {
+        const matchesSearch = user.email.toLowerCase().includes(searchTerm);
+        const matchesRank = rankFilter === 'all' ||
+          (rankFilter === 'community' && user.is_community_member) ||
+          (rankFilter === 'regular' && !user.is_community_member);
+        return matchesSearch && matchesRank;
+      });
       sortUsers();
     }
 
