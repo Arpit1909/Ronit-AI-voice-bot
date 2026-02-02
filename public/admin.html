@@ -579,6 +579,8 @@
       border: 1px solid rgba(245, 158, 11, 0.2);
       white-space: nowrap;
       flex-wrap: nowrap;
+      flex-shrink: 0;
+      margin-right: 0.5rem;
     }
     
     .badge.vip i {
@@ -590,6 +592,23 @@
     .badge.vip span {
       line-height: 1.2;
       white-space: nowrap;
+    }
+
+    /* Rank column: ensure badge fits and doesn't overlap Identity */
+    .users-table th:nth-child(2),
+    .users-table td:nth-child(2) {
+      min-width: 140px;
+      white-space: nowrap;
+    }
+
+    /* Identity column: prevent email from overflowing into Rank */
+    .identity-cell {
+      font-weight: 500;
+      font-family: 'Outfit', sans-serif;
+      word-break: break-all;
+      overflow-wrap: break-word;
+      max-width: 200px;
+      padding-left: 0.5rem;
     }
 
     /* --- Login Modal --- */
@@ -1409,7 +1428,7 @@
         <tr>
           <td data-label="Status">${statusBadge}</td>
           <td data-label="Rank">${vipBadge}</td>
-          <td data-label="Identity" style="font-weight: 500; font-family:'Outfit'; word-break:break-all; overflow-wrap:break-word; max-width:200px;">${user.email}</td>
+          <td data-label="Identity" class="identity-cell">${user.email}</td>
           <td data-label="Balance">${formatTalktime(user.talktime)}</td>
           <td data-label="Sessions">${user.total_sessions}</td>
           <td data-label="Last Seen" style="color: var(--text-muted); font-size: 0.85rem;">${getTimeAgo(user.last_login)}</td>
