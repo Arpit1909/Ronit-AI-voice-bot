@@ -196,7 +196,7 @@ session.mount("http://", HTTPAdapter(max_retries=retries))
 
 # ===== Token Cache =====
 _TOKEN_CACHE: Tuple[Optional[str], datetime] = (None, datetime.min)
-TOKEN_CACHE_TTL = timedelta(seconds=55)
+TOKEN_CACHE_TTL = timedelta(seconds=480)  # 8 minutes
 
 # ==========================================
 # GOD LEVEL IN-MEMORY SESSION MANAGER
@@ -240,21 +240,22 @@ def flush_pending_time(email):
 
 def check_and_refill_community_bonus(email: str) -> bool:
     """
-    Checks if a Community Member is due for their monthly 15-minute refill.
-    Returns True if refilled, False otherwise.
+    Resets Community Member talktime to 15 minutes on the 1st of each month.
+    If the user hasn't used their time, it stays at 15 min (SET, not ADD).
+    Returns True if reset was applied, False otherwise.
     """
     try:
         response = supabase.table("users").select("*").eq("email", email).execute()
         if not response.data:
             return False
-            
+
         user = response.data[0]
         if not user.get("is_community_member"):
             return False
 
+        now = datetime.now(timezone.utc)
         last_refill_str = user.get("last_community_refill")
         should_refill = False
-        now = datetime.now(timezone.utc)
 
         if not last_refill_str:
             should_refill = True
@@ -264,11 +265,12 @@ def check_and_refill_community_bonus(email: str) -> bool:
                     last_refill = datetime.fromisoformat(last_refill_str.replace('Z', '+00:00'))
                 else:
                     last_refill = datetime.fromisoformat(last_refill_str)
-                
+
                 if last_refill.tzinfo is None:
                     last_refill = last_refill.replace(tzinfo=timezone.utc)
-                
-                if (now - last_refill).days >= 30:
+
+                # Refill if we are now in a newer month than the last refill
+                if (now.year, now.month) > (last_refill.year, last_refill.month):
                     should_refill = True
             except Exception as e:
                 logger.error(f"Date parse error for community refill: {e}")
@@ -276,19 +278,17 @@ def check_and_refill_community_bonus(email: str) -> bool:
 
         if should_refill:
             try:
-                current_talktime = int(user.get("talktime", 0))
-                new_talktime = current_talktime + 900
-                
+                # Always SET to 15 minutes — never add on top of existing balance
                 supabase.table("users").update({
-                    "talktime": new_talktime,
+                    "talktime": 900,
                     "last_community_refill": now.isoformat()
                 }).eq("email", email).execute()
-                
-                logger.info(f"💎 Community Bonus: Added 15 mins to {email}")
+
+                logger.info(f"Community Reset: Set 15 mins for {email}")
                 return True
             except Exception as e:
                 logger.error(f"Failed to apply community bonus: {e}")
-                
+
         return False
     except Exception as e:
         logger.error(f"Error in community refill: {e}")
@@ -1243,7 +1243,7 @@ def start_secure_session(current_user_email: str):
     })
 
 @app.post("/api/session/heartbeat")
-@limiter.limit("120 per minute")
+@limiter.limit("300 per minute")
 @token_required
 def secure_heartbeat(current_user_email: str):
     lock = redis_client.lock(f"lock:{current_user_email}", timeout=5)
@@ -1302,7 +1302,7 @@ def secure_heartbeat(current_user_email: str):
         now = datetime.now(timezone.utc)
         delta_seconds = (now - last_heartbeat).total_seconds()
         
-        # Increased tolerance: heartbeat runs every 5s, allow up to 30s gap for network delays
+        # Heartbeat runs every 2s, allow up to 30s gap for network delays/tab switches
         MAX_HEARTBEAT_GAP = 30.0
         
         if delta_seconds > MAX_HEARTBEAT_GAP:
@@ -1976,6 +1976,150 @@ def remove_community_member():
     except Exception as e:
         logger.error(f"Error removing community member: {e}")
         raise AppError("Database error", status_code=500)
+
+# ==========================================
+# COUPON CODE SYSTEM
+# ==========================================
+
+@app.post("/api/admin/coupons/create")
+@limiter.limit("50 per hour")
+def create_coupon():
+    """Admin: create a coupon code that grants community member status."""
+    verify_admin_token()
+    data = request.get_json(silent=True) or {}
+
+    code = (data.get("code") or "").strip().upper()
+    max_uses = data.get("max_uses")        # None = unlimited
+    expires_at = data.get("expires_at")   # ISO string or None
+
+    if not code:
+        raise AppError("Coupon code is required", status_code=400)
+    if len(code) < 3 or len(code) > 32:
+        raise AppError("Code must be 3–32 characters", status_code=400)
+
+    try:
+        existing = supabase.table("coupon_codes").select("code").eq("code", code).execute()
+        if existing.data:
+            raise AppError("Coupon code already exists", status_code=409)
+
+        row = {
+            "code": code,
+            "max_uses": max_uses,
+            "uses": 0,
+            "is_active": True,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "expires_at": expires_at
+        }
+        supabase.table("coupon_codes").insert(row).execute()
+        logger.info(f"Coupon created: {code}")
+        return jsonify({"ok": True, "message": f"Coupon '{code}' created.", "coupon": row})
+    except AppError:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating coupon: {e}")
+        raise AppError("Database error creating coupon", status_code=500)
+
+
+@app.get("/api/admin/coupons")
+@limiter.limit("50 per hour")
+def list_coupons():
+    """Admin: list all coupon codes."""
+    verify_admin_token()
+    try:
+        res = supabase.table("coupon_codes").select("*").order("created_at", desc=True).execute()
+        return jsonify({"ok": True, "coupons": res.data or []})
+    except Exception as e:
+        logger.error(f"Error listing coupons: {e}")
+        return jsonify({"ok": True, "coupons": [], "warning": "Coupon table not found. Create it in Supabase first."})
+
+
+@app.delete("/api/admin/coupons/<code>")
+@limiter.limit("50 per hour")
+def delete_coupon(code: str):
+    """Admin: delete a coupon code."""
+    verify_admin_token()
+    code = code.strip().upper()
+    try:
+        supabase.table("coupon_codes").delete().eq("code", code).execute()
+        return jsonify({"ok": True, "message": f"Coupon '{code}' deleted."})
+    except Exception as e:
+        logger.error(f"Error deleting coupon: {e}")
+        raise AppError("Database error", status_code=500)
+
+
+@app.post("/api/redeem-coupon")
+@limiter.limit("10 per hour")
+@token_required
+def redeem_coupon(current_user_email: str):
+    """User: redeem a coupon code to become a community member."""
+    data = request.get_json(silent=True) or {}
+    code = (data.get("code") or "").strip().upper()
+
+    if not code:
+        raise AppError("Coupon code is required", status_code=400)
+
+    try:
+        # Get coupon
+        res = supabase.table("coupon_codes").select("*").eq("code", code).execute()
+        if not res.data:
+            raise AppError("Invalid coupon code", status_code=404)
+
+        coupon = res.data[0]
+
+        if not coupon.get("is_active"):
+            raise AppError("This coupon is no longer active", status_code=400)
+
+        # Check expiry
+        expires_at = coupon.get("expires_at")
+        if expires_at:
+            try:
+                exp = datetime.fromisoformat(expires_at.replace('Z', '+00:00'))
+                if exp.tzinfo is None:
+                    exp = exp.replace(tzinfo=timezone.utc)
+                if datetime.now(timezone.utc) > exp:
+                    raise AppError("This coupon has expired", status_code=400)
+            except AppError:
+                raise
+            except Exception:
+                pass
+
+        # Check max uses
+        max_uses = coupon.get("max_uses")
+        uses = coupon.get("uses", 0)
+        if max_uses is not None and uses >= max_uses:
+            raise AppError("This coupon has reached its usage limit", status_code=400)
+
+        # Check if user is already a community member
+        user = get_user(current_user_email)
+        if not user:
+            raise AppError("User not found", status_code=404)
+        if user.get("is_community_member"):
+            raise AppError("You are already a Community Member", status_code=400)
+
+        # Grant community member status
+        now_iso = datetime.now(timezone.utc).isoformat()
+        supabase.table("users").update({
+            "is_community_member": True,
+            "talktime": 900,
+            "last_community_refill": now_iso
+        }).eq("email", current_user_email).execute()
+
+        # Increment coupon uses (deactivate if max reached)
+        new_uses = uses + 1
+        update_data = {"uses": new_uses}
+        if max_uses is not None and new_uses >= max_uses:
+            update_data["is_active"] = False
+        supabase.table("coupon_codes").update(update_data).eq("code", code).execute()
+
+        logger.info(f"Coupon '{code}' redeemed by {current_user_email}")
+        return jsonify({"ok": True, "message": "Welcome to the Community! You now have 15 minutes of talk time."})
+
+    except AppError:
+        raise
+    except Exception as e:
+        logger.error(f"Error redeeming coupon: {e}")
+        raise AppError("Database error", status_code=500)
+
 
 @app.get("/api/admin/users")
 @limiter.limit("100 per hour")

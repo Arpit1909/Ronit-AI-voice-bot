@@ -1810,6 +1810,23 @@
         <span>Buy Talktime</span>
       </button>
 
+      <!-- Coupon Code -->
+      <div id="couponSection" style="width:100%; margin-bottom: 0.5rem;">
+        <div style="display:flex; gap:6px;">
+          <input type="text" id="couponInput" placeholder="Enter coupon code..." maxlength="32"
+            style="flex:1; padding:10px 12px; border-radius:10px; border:1px solid var(--card-border);
+                   background:var(--card-bg); color:var(--text-main); font-size:0.85rem;
+                   outline:none; font-family:inherit; text-transform:uppercase; letter-spacing:1px;">
+          <button id="redeemCouponBtn" onclick="redeemCoupon()"
+            style="padding:10px 14px; border-radius:10px; border:none; cursor:pointer;
+                   background:linear-gradient(135deg,#047857,#059669); color:white;
+                   font-weight:700; font-size:0.8rem; white-space:nowrap; font-family:inherit;">
+            Redeem
+          </button>
+        </div>
+        <div id="couponMsg" style="font-size:0.78rem; margin-top:5px; padding:0 2px; min-height:16px;"></div>
+      </div>
+
       <!-- Change Account Button -->
       <button class="side-panel-footer-btn side-panel-account-btn" id="btn-change-account">
         <i class="fas fa-user-circle"></i>

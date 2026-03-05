@@ -1087,6 +1087,49 @@
         </div>
       </div>
 
+      <!-- Coupon Codes -->
+      <div class="card" style="margin-bottom: 2.5rem;">
+        <div class="stat-label" style="margin-bottom: 1.5rem;">
+          <span><i class="fas fa-ticket-alt" style="margin-right: 0.5rem; color: var(--warning);"></i>Coupon Codes</span>
+          <button class="btn" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;" onclick="loadCoupons()">
+            <i class="fas fa-sync-alt"></i> Refresh
+          </button>
+        </div>
+
+        <!-- Create coupon form -->
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin-bottom:1.25rem; align-items:flex-end;">
+          <div style="display:flex; flex-direction:column; gap:4px;">
+            <label style="font-size:0.75rem; color:var(--text-muted); font-weight:600;">CODE *</label>
+            <input type="text" id="couponCodeInput" placeholder="e.g. RONIT2026" maxlength="32"
+              style="padding:8px 12px; border-radius:8px; border:1px solid var(--border); background:var(--input-bg);
+                     color:var(--text-main); font-size:0.875rem; text-transform:uppercase; letter-spacing:1px; width:160px;">
+          </div>
+          <div style="display:flex; flex-direction:column; gap:4px;">
+            <label style="font-size:0.75rem; color:var(--text-muted); font-weight:600;">MAX USES (blank = unlimited)</label>
+            <input type="number" id="couponMaxUses" placeholder="e.g. 10" min="1"
+              style="padding:8px 12px; border-radius:8px; border:1px solid var(--border); background:var(--input-bg);
+                     color:var(--text-main); font-size:0.875rem; width:140px;">
+          </div>
+          <div style="display:flex; flex-direction:column; gap:4px;">
+            <label style="font-size:0.75rem; color:var(--text-muted); font-weight:600;">EXPIRES (optional)</label>
+            <input type="date" id="couponExpiry"
+              style="padding:8px 12px; border-radius:8px; border:1px solid var(--border); background:var(--input-bg);
+                     color:var(--text-main); font-size:0.875rem;">
+          </div>
+          <button class="btn btn-success" onclick="createCoupon()" style="padding:8px 18px; height:38px;">
+            <i class="fas fa-plus"></i> Create Coupon
+          </button>
+        </div>
+
+        <!-- Coupon list -->
+        <div id="couponList" style="min-height:50px; max-height:360px; overflow-y:auto;">
+          <div style="text-align:center; color:var(--text-muted); padding:2rem;">
+            <i class="fas fa-spinner fa-spin" style="font-size:1.5rem; margin-bottom:0.5rem;"></i>
+            <div>Loading coupons...</div>
+          </div>
+        </div>
+      </div>
+
       <!-- User Table -->
       <div class="table-container" id="usersTableSection">
         <div class="table-controls">
@@ -1254,6 +1297,9 @@
 
         // Load pending community members
         loadPendingCommunityMembers();
+
+        // Load coupon codes
+        loadCoupons();
 
       } catch (error) {
         showAlert('System Sync Error: ' + error.message, 'error');
@@ -1560,6 +1606,97 @@
         } else {
           showAlert(data.message || 'Failed to remove', 'error');
         }
+      } catch (e) {
+        showAlert(e.message, 'error');
+      }
+    }
+
+    // --- Coupon Codes ---
+    async function loadCoupons() {
+      if (!adminToken) return;
+      const list = document.getElementById('couponList');
+      try {
+        const res = await fetch('/api/admin/coupons', { headers: { 'Authorization': `Bearer ${adminToken}` } });
+        if (res.status === 401) { logout(); return; }
+        const data = await res.json();
+        if (!data.coupons || data.coupons.length === 0) {
+          list.innerHTML = '<div style="text-align:center; color:var(--text-muted); padding:2rem;">No coupons yet.</div>';
+          return;
+        }
+        list.innerHTML = `<table style="width:100%; border-collapse:collapse; font-size:0.875rem;">
+          <thead><tr style="border-bottom:1px solid var(--border);">
+            <th style="text-align:left; padding:8px 10px; color:var(--text-muted); font-weight:600;">Code</th>
+            <th style="text-align:center; padding:8px 10px; color:var(--text-muted); font-weight:600;">Uses</th>
+            <th style="text-align:center; padding:8px 10px; color:var(--text-muted); font-weight:600;">Status</th>
+            <th style="text-align:left; padding:8px 10px; color:var(--text-muted); font-weight:600;">Expires</th>
+            <th style="text-align:center; padding:8px 10px; color:var(--text-muted); font-weight:600;">Action</th>
+          </tr></thead>
+          <tbody>${data.coupons.map(c => {
+            const uses = c.max_uses != null ? `${c.uses}/${c.max_uses}` : `${c.uses}/∞`;
+            const status = c.is_active ? '<span style="color:#059669; font-weight:700;">Active</span>' : '<span style="color:#ef4444; font-weight:700;">Inactive</span>';
+            const exp = c.expires_at ? new Date(c.expires_at).toLocaleDateString() : '—';
+            return `<tr style="border-bottom:1px solid var(--border);">
+              <td style="padding:10px; font-weight:700; letter-spacing:1px;">${c.code}</td>
+              <td style="padding:10px; text-align:center;">${uses}</td>
+              <td style="padding:10px; text-align:center;">${status}</td>
+              <td style="padding:10px;">${exp}</td>
+              <td style="padding:10px; text-align:center;">
+                <button class="btn btn-danger" style="padding:4px 12px; font-size:0.78rem;" onclick="deleteCoupon('${c.code}')">
+                  <i class="fas fa-trash"></i> Delete
+                </button>
+              </td>
+            </tr>`;
+          }).join('')}</tbody>
+        </table>`;
+      } catch (e) {
+        list.innerHTML = '<div style="color:#ef4444; padding:1rem;">Failed to load coupons.</div>';
+      }
+    }
+
+    async function createCoupon() {
+      const code = (document.getElementById('couponCodeInput').value || '').trim().toUpperCase();
+      const maxUsesRaw = document.getElementById('couponMaxUses').value.trim();
+      const expiryRaw = document.getElementById('couponExpiry').value;
+
+      if (!code) { showAlert('Enter a coupon code', 'error'); return; }
+
+      const body = { code };
+      if (maxUsesRaw) body.max_uses = parseInt(maxUsesRaw);
+      if (expiryRaw) body.expires_at = new Date(expiryRaw).toISOString();
+
+      try {
+        const res = await fetch('/api/admin/coupons/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminToken}` },
+          body: JSON.stringify(body)
+        });
+        if (res.status === 401) { logout(); return; }
+        const data = await res.json();
+        if (data.ok) {
+          showAlert(`Coupon '${code}' created!`, 'success');
+          document.getElementById('couponCodeInput').value = '';
+          document.getElementById('couponMaxUses').value = '';
+          document.getElementById('couponExpiry').value = '';
+          loadCoupons();
+        } else {
+          showAlert(data.error || 'Failed to create coupon', 'error');
+        }
+      } catch (e) {
+        showAlert(e.message, 'error');
+      }
+    }
+
+    async function deleteCoupon(code) {
+      if (!confirm(`Delete coupon '${code}'? This cannot be undone.`)) return;
+      try {
+        const res = await fetch(`/api/admin/coupons/${encodeURIComponent(code)}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${adminToken}` }
+        });
+        if (res.status === 401) { logout(); return; }
+        const data = await res.json();
+        if (data.ok) { showAlert(`Coupon '${code}' deleted.`, 'success'); loadCoupons(); }
+        else showAlert(data.error || 'Failed to delete', 'error');
       } catch (e) {
         showAlert(e.message, 'error');
       }

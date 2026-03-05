@@ -61,6 +61,10 @@ let helloPromptTimeout = null; // Timeout for auto-removing "Say Hello" prompt
 let paymentModalContext = 'start'; // 'start' or 'during'
 let isSessionPaused = false;
 let initialTalktime = 0; // Store initial talktime when session starts
+let _cachedConfig = null;       // Pre-fetched /config result
+let _cachedToken = null;        // Pre-fetched ElevenLabs conversation token
+let _cachedTokenTime = 0;       // Timestamp when token was fetched (ms)
+const TOKEN_PREFETCH_TTL = 7 * 60 * 1000; // 7 minutes (matches server 8min cache)
 let isMicMuted = false; // Track microphone mute state
 let userMediaStream = null; // Store the microphone stream for muting
 const HEARTBEAT_RATE = 5000; // Sync with server every 5 seconds
@@ -271,6 +275,9 @@ document.addEventListener('DOMContentLoaded', () => {
       })
       .catch(err => console.warn('⚠️ Initial sync failed:', err));
   }, 1000); // Wait 1 second after page load
+
+  // Pre-warm config and ElevenLabs token in the background so call starts instantly
+  setTimeout(() => prefetchCallAssets(), 2000);
 
   // Start periodic online status ping (every 60 seconds) to keep user marked as online
   startOnlinePing();
@@ -1148,33 +1155,36 @@ async function startVoiceSession() {
   updateStatus('Connecting to AI service...', 'connecting');
 
   try {
-    const cfgRes = await fetch('/config', { cache: 'no-store' });
-    if (!cfgRes.ok) throw new Error('Failed to fetch configuration');
-    const cfg = await cfgRes.json();
+    const authToken = sessionStorage.getItem("authToken");
+    if (!authToken) throw new Error("Authentication required");
 
-    // ✅ NEW / SECURE CODE
-    const authToken = sessionStorage.getItem("authToken"); // Get the stored token
-    if (!authToken) {
-      console.error("No token found, user must login.");
-      // Optional: Redirect to login or just fail gracefully
-      throw new Error("Authentication required");
+    // Use pre-fetched config if available, otherwise fetch now
+    let cfg = _cachedConfig;
+    if (!cfg) {
+      const cfgRes = await fetch('/config', { cache: 'no-store' });
+      if (!cfgRes.ok) throw new Error('Failed to fetch configuration');
+      cfg = await cfgRes.json();
+      _cachedConfig = cfg;
     }
 
-    const tokenRes = await fetch("/conversation-token", {
-      method: "GET",
-      headers: {
-        "Authorization": "Bearer " + authToken,  // <--- The Key to the Gate
-        "Content-Type": "application/json"
-      }
-    });
-
-    if (!tokenRes.ok) throw new Error('Token request failed');
-    const tokenData = await tokenRes.json();
-    const token = tokenData.token; // Extract token from response
-
+    // Use pre-fetched token if valid, otherwise fetch now
+    const now = Date.now();
+    let token = (_cachedToken && (now - _cachedTokenTime) < TOKEN_PREFETCH_TTL) ? _cachedToken : null;
     if (!token) {
-      throw new Error('Token not received from server');
+      const tokenRes = await fetch("/conversation-token", {
+        method: "GET",
+        headers: { "Authorization": "Bearer " + authToken, "Content-Type": "application/json" }
+      });
+      if (!tokenRes.ok) throw new Error('Token request failed');
+      const tokenData = await tokenRes.json();
+      token = tokenData.token;
+      if (!token) throw new Error('Token not received from server');
+      _cachedToken = token;
+      _cachedTokenTime = now;
     }
+
+    // Invalidate token cache so next call gets a fresh one
+    _cachedToken = null;
 
     console.log('🎙️ Starting conversation...');
 
@@ -1610,29 +1620,22 @@ function startTalkTimeTracking() {
       }
 
       if (data.ok) {
-        // [FIX] Server is the source of truth - always sync with server value
         const serverValue = data.remaining_seconds;
-        // Get previous value BEFORE updating sessionStorage
         const previousValue = parseFloat(sessionStorage.getItem('userTalktime') || 0);
-        
-        // Update sessionStorage with server value (this is the source of truth)
+
+        // Silently correct sessionStorage — the 1s local timer reads from here
+        // and updates the display smoothly. Don't call updateTalktimeDisplay()
+        // here or the display will jump every 5 seconds.
         sessionStorage.setItem('userTalktime', serverValue.toString());
-        
-        // Update the display with server value (this corrects any drift)
-        updateTalktimeDisplay(Math.floor(serverValue));
-        
-        // Update connection activity on successful heartbeat
+
         lastConnectionTime = Date.now();
-        
-        // Log if session was recreated (for debugging)
+
         if (data.note === 'session_recreated') {
-          console.log("✅ Session was auto-recreated by backend");
+          console.log("Session was auto-recreated by backend");
         }
-        
-        // Only log if there was significant drift (more than 2 seconds difference)
-        // This prevents spam when local countdown is working correctly
+
         if (Math.abs(previousValue - serverValue) > 2) {
-          console.log(`🔄 Server sync: ${Math.floor(previousValue)}s → ${Math.floor(serverValue)}s (drift corrected)`);
+          console.log(`Server sync drift corrected: ${Math.floor(previousValue)}s → ${Math.floor(serverValue)}s`);
         }
       }
 
@@ -1641,7 +1644,7 @@ function startTalkTimeTracking() {
       // Don't immediately end on network errors - allow retries
       // The server will handle timeout if heartbeats stop completely
     }
-  }, 5000);
+  }, 2000);
 }
 
 // Stop tracking talk time
@@ -1797,6 +1800,46 @@ window.logoutAndRedirect = function () {
   window.location.href = '/login.html';
 };
 
+// Pre-fetch /config and ElevenLabs token in the background
+async function prefetchCallAssets() {
+  const authToken = sessionStorage.getItem('authToken');
+  if (!authToken) return; // Not logged in yet
+
+  try {
+    // Fetch config (agentId never changes, safe to cache indefinitely)
+    if (!_cachedConfig) {
+      const cfgRes = await fetch('/config', { cache: 'no-store' });
+      if (cfgRes.ok) {
+        _cachedConfig = await cfgRes.json();
+        console.log('Pre-fetched config');
+      }
+    }
+  } catch (e) {
+    console.warn('Config pre-fetch failed:', e);
+  }
+
+  try {
+    // Fetch ElevenLabs token if not cached or expired
+    const now = Date.now();
+    if (!_cachedToken || (now - _cachedTokenTime) > TOKEN_PREFETCH_TTL) {
+      const tokenRes = await fetch('/conversation-token', {
+        method: 'GET',
+        headers: { 'Authorization': 'Bearer ' + authToken, 'Content-Type': 'application/json' }
+      });
+      if (tokenRes.ok) {
+        const tokenData = await tokenRes.json();
+        if (tokenData.token) {
+          _cachedToken = tokenData.token;
+          _cachedTokenTime = now;
+          console.log('Pre-fetched ElevenLabs token');
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('Token pre-fetch failed:', e);
+  }
+}
+
 // Periodic talktime refresh to sync with admin updates
 function startTalktimeRefresh() {
   // Clear any existing interval
@@ -1871,6 +1914,49 @@ function startOnlinePing() {
       console.warn('⚠️ Error pinging server:', error);
     }
   }, 60000); // Ping every 60 seconds (within 15 minute window)
+}
+
+async function redeemCoupon() {
+  const input = document.getElementById('couponInput');
+  const msg = document.getElementById('couponMsg');
+  const btn = document.getElementById('redeemCouponBtn');
+  const code = (input?.value || '').trim().toUpperCase();
+
+  if (!code) { msg.style.color = '#ef4444'; msg.textContent = 'Please enter a coupon code.'; return; }
+
+  btn.disabled = true;
+  btn.textContent = '...';
+  msg.textContent = '';
+
+  try {
+    const res = await authenticatedFetch('/api/redeem-coupon', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code })
+    });
+    const data = await res.json();
+
+    if (data.ok) {
+      msg.style.color = '#059669';
+      msg.textContent = data.message;
+      input.value = '';
+      // Refresh talktime to reflect new balance
+      setTimeout(() => {
+        authenticatedFetch('/api/user/talktime').then(r => r.json()).then(d => {
+          if (d.ok) { sessionStorage.setItem('userTalktime', d.talktime); updateTalktimeDisplay(d.talktime); }
+        });
+      }, 500);
+    } else {
+      msg.style.color = '#ef4444';
+      msg.textContent = data.error || 'Invalid coupon code.';
+    }
+  } catch (e) {
+    msg.style.color = '#ef4444';
+    msg.textContent = 'Something went wrong. Try again.';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Redeem';
+  }
 }
 
 function stopOnlinePing() {
@@ -2162,6 +2248,9 @@ async function endSession() {
   if (timerInterval) clearInterval(timerInterval);
   stopTalkTimeTracking(); // Stop tracking talk time
   hidePaymentModal(); // Hide payment modal if open
+
+  // Pre-warm token for next call
+  setTimeout(() => prefetchCallAssets(), 3000);
 
   // Reset connection status indicator
   const connectionStatus = document.getElementById('connectionStatus');
