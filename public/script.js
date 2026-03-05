@@ -67,7 +67,7 @@ let _cachedTokenTime = 0;       // Timestamp when token was fetched (ms)
 const TOKEN_PREFETCH_TTL = 7 * 60 * 1000; // 7 minutes (matches server 8min cache)
 let isMicMuted = false; // Track microphone mute state
 let userMediaStream = null; // Store the microphone stream for muting
-const HEARTBEAT_RATE = 5000; // Sync with server every 5 seconds
+const HEARTBEAT_RATE = 2000; // Sync with server every 2 seconds
 // Text status controller - no animation intervals needed
 
 
@@ -1922,41 +1922,44 @@ async function redeemCoupon() {
   const btn = document.getElementById('redeemCouponBtn');
   const code = (input?.value || '').trim().toUpperCase();
 
-  if (!code) { msg.style.color = '#ef4444'; msg.textContent = 'Please enter a coupon code.'; return; }
+  if (!code) { showCouponMsg('Please enter a coupon code.', false); return; }
 
   btn.disabled = true;
-  btn.textContent = '...';
-  msg.textContent = '';
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Checking...';
+  if (msg) msg.textContent = '';
 
   try {
     const res = await authenticatedFetch('/api/redeem-coupon', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ code })
     });
     const data = await res.json();
 
     if (data.ok) {
-      msg.style.color = '#059669';
-      msg.textContent = data.message;
+      showCouponMsg(data.message || 'Coupon redeemed!', true);
       input.value = '';
-      // Refresh talktime to reflect new balance
       setTimeout(() => {
         authenticatedFetch('/api/user/talktime').then(r => r.json()).then(d => {
           if (d.ok) { sessionStorage.setItem('userTalktime', d.talktime); updateTalktimeDisplay(d.talktime); }
         });
       }, 500);
     } else {
-      msg.style.color = '#ef4444';
-      msg.textContent = data.error || 'Invalid coupon code.';
+      // AppError returns {message: "..."}, not {error: "..."}
+      showCouponMsg(data.message || data.error || 'Invalid coupon code.', false);
     }
   } catch (e) {
-    msg.style.color = '#ef4444';
-    msg.textContent = 'Something went wrong. Try again.';
+    showCouponMsg('Something went wrong. Try again.', false);
   } finally {
     btn.disabled = false;
-    btn.textContent = 'Redeem';
+    btn.innerHTML = '<i class="fas fa-check"></i> Redeem';
   }
+}
+
+function showCouponMsg(text, success) {
+  const msg = document.getElementById('couponMsg');
+  if (!msg) return;
+  msg.textContent = text;
+  msg.style.color = success ? '#059669' : '#ef4444';
 }
 
 function stopOnlinePing() {

@@ -1969,9 +1969,10 @@ def remove_community_member():
     try:
         supabase.table("users").update({
             "is_community_member": False,
-            "last_community_refill": None
+            "last_community_refill": None,
+            "talktime": 180  # Reset to 3 minutes on removal
         }).eq("email", email).execute()
-        
+
         return jsonify({"ok": True, "message": f"{email} removed from Community."})
     except Exception as e:
         logger.error(f"Error removing community member: {e}")
@@ -2044,6 +2045,28 @@ def delete_coupon(code: str):
         return jsonify({"ok": True, "message": f"Coupon '{code}' deleted."})
     except Exception as e:
         logger.error(f"Error deleting coupon: {e}")
+        raise AppError("Database error", status_code=500)
+
+
+@app.post("/api/admin/coupons/<code>/toggle")
+@limiter.limit("50 per hour")
+def toggle_coupon(code: str):
+    """Admin: toggle a coupon active/inactive."""
+    verify_admin_token()
+    code = code.strip().upper()
+    try:
+        res = supabase.table("coupon_codes").select("is_active").eq("code", code).execute()
+        if not res.data:
+            raise AppError("Coupon not found", status_code=404)
+        current = res.data[0]["is_active"]
+        new_state = not current
+        supabase.table("coupon_codes").update({"is_active": new_state}).eq("code", code).execute()
+        state_str = "enabled" if new_state else "disabled"
+        return jsonify({"ok": True, "message": f"Coupon '{code}' {state_str}.", "is_active": new_state})
+    except AppError:
+        raise
+    except Exception as e:
+        logger.error(f"Error toggling coupon: {e}")
         raise AppError("Database error", status_code=500)
 
 
@@ -2400,9 +2423,10 @@ def toggle_vip_endpoint(email: str):
         "last_community_refill": None if not new_status else user.get("last_community_refill")
     }
     if new_status:
-        # When promoting: give 15 min total (community members get only this)
         update_data["talktime"] = 900
         update_data["last_community_refill"] = datetime.now(timezone.utc).isoformat()
+    else:
+        update_data["talktime"] = 180  # Reset to 3 minutes on removal
     
     update_user(email, update_data)
     

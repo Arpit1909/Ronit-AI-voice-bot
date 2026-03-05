@@ -276,6 +276,125 @@
       transform: translateY(-2px);
     }
 
+    .btn-success {
+      background: linear-gradient(135deg, #047857, #059669);
+      border: none;
+      color: white;
+      box-shadow: 0 4px 14px rgba(5, 150, 105, 0.35);
+    }
+
+    .btn-success:hover {
+      background: linear-gradient(135deg, #065f46, #047857);
+      box-shadow: 0 6px 20px rgba(5, 150, 105, 0.45);
+      transform: translateY(-2px);
+    }
+
+    .btn-danger {
+      background: linear-gradient(135deg, #b91c1c, #dc2626);
+      border: none;
+      color: white;
+      box-shadow: 0 4px 14px rgba(220, 38, 38, 0.35);
+    }
+
+    .btn-danger:hover {
+      background: linear-gradient(135deg, #991b1b, #b91c1c);
+      box-shadow: 0 6px 20px rgba(220, 38, 38, 0.45);
+      transform: translateY(-2px);
+    }
+
+    /* --- Community Access Codes Section --- */
+    .coupon-form-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 1.25rem;
+      align-items: flex-end;
+    }
+
+    .coupon-form-field {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      flex: 1;
+      min-width: 130px;
+    }
+
+    .coupon-form-field label {
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.6px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+    }
+
+    .coupon-form-field input {
+      padding: 9px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+      background: var(--bg-surface);
+      color: var(--text-main);
+      font-size: 0.875rem;
+      font-family: inherit;
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+    .coupon-form-field input:focus {
+      outline: none;
+      border-color: var(--brand-primary);
+    }
+
+    #couponCodeInput { text-transform: uppercase; letter-spacing: 1px; }
+
+    .coupon-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+    .coupon-table th {
+      text-align: left;
+      padding: 10px 12px;
+      color: var(--text-muted);
+      font-weight: 600;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 1px solid var(--border-color);
+    }
+    .coupon-table td { padding: 12px; border-bottom: 1px solid var(--border-color); vertical-align: middle; }
+    .coupon-table tr:last-child td { border-bottom: none; }
+    .coupon-table tr:hover td { background: var(--bg-surface-hover); }
+
+    .coupon-code-badge {
+      font-weight: 700;
+      letter-spacing: 2px;
+      font-size: 0.875rem;
+      background: var(--bg-body);
+      padding: 4px 10px;
+      border-radius: 6px;
+      border: 1px solid var(--border-color);
+      display: inline-block;
+    }
+
+    /* Flagged Users Section */
+    .flag-badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .flag-high { background: rgba(239,68,68,0.15); color: #f87171; }
+    .flag-medium { background: rgba(245,158,11,0.15); color: #fbbf24; }
+    .flag-low { background: rgba(148,163,184,0.12); color: #94a3b8; }
+
+    @media (max-width: 640px) {
+      .coupon-form-row { flex-direction: column; }
+      .coupon-form-field { min-width: 100%; }
+      .coupon-table thead { display: none; }
+      .coupon-table tr { display: block; padding: 0.75rem 0; border-bottom: 1px solid var(--border-color); }
+      .coupon-table td { display: flex; justify-content: space-between; align-items: center; padding: 5px 12px; border: none; }
+      .coupon-table td::before { content: attr(data-label); font-size: 0.72rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; }
+    }
+
     /* --- Cards & Grid --- */
     .stats-grid {
       display: grid;
@@ -1087,47 +1206,50 @@
         </div>
       </div>
 
-      <!-- Coupon Codes -->
+      <!-- Community Access Codes -->
       <div class="card" style="margin-bottom: 2.5rem;">
         <div class="stat-label" style="margin-bottom: 1.5rem;">
-          <span><i class="fas fa-ticket-alt" style="margin-right: 0.5rem; color: var(--warning);"></i>Coupon Codes</span>
+          <span><i class="fas fa-key" style="margin-right: 0.5rem; color: var(--warning);"></i>Community Access Codes</span>
           <button class="btn" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;" onclick="loadCoupons()">
             <i class="fas fa-sync-alt"></i> Refresh
           </button>
         </div>
 
-        <!-- Create coupon form -->
-        <div style="display:flex; flex-wrap:wrap; gap:10px; margin-bottom:1.25rem; align-items:flex-end;">
-          <div style="display:flex; flex-direction:column; gap:4px;">
-            <label style="font-size:0.75rem; color:var(--text-muted); font-weight:600;">CODE *</label>
-            <input type="text" id="couponCodeInput" placeholder="e.g. RONIT2026" maxlength="32"
-              style="padding:8px 12px; border-radius:8px; border:1px solid var(--border); background:var(--input-bg);
-                     color:var(--text-main); font-size:0.875rem; text-transform:uppercase; letter-spacing:1px; width:160px;">
+        <div class="coupon-form-row">
+          <div class="coupon-form-field">
+            <label>Access Code *</label>
+            <input type="text" id="couponCodeInput" placeholder="e.g. RONIT2026" maxlength="32" autocomplete="off">
           </div>
-          <div style="display:flex; flex-direction:column; gap:4px;">
-            <label style="font-size:0.75rem; color:var(--text-muted); font-weight:600;">MAX USES (blank = unlimited)</label>
-            <input type="number" id="couponMaxUses" placeholder="e.g. 10" min="1"
-              style="padding:8px 12px; border-radius:8px; border:1px solid var(--border); background:var(--input-bg);
-                     color:var(--text-main); font-size:0.875rem; width:140px;">
+          <div class="coupon-form-field">
+            <label>Max Uses (blank = unlimited)</label>
+            <input type="number" id="couponMaxUses" placeholder="e.g. 10" min="1">
           </div>
-          <div style="display:flex; flex-direction:column; gap:4px;">
-            <label style="font-size:0.75rem; color:var(--text-muted); font-weight:600;">EXPIRES (optional)</label>
-            <input type="date" id="couponExpiry"
-              style="padding:8px 12px; border-radius:8px; border:1px solid var(--border); background:var(--input-bg);
-                     color:var(--text-main); font-size:0.875rem;">
+          <div class="coupon-form-field">
+            <label>Expires (optional)</label>
+            <input type="date" id="couponExpiry">
           </div>
-          <button class="btn btn-success" onclick="createCoupon()" style="padding:8px 18px; height:38px;">
-            <i class="fas fa-plus"></i> Create Coupon
+          <button class="btn btn-success" onclick="createCoupon()" style="flex-shrink:0; white-space:nowrap;">
+            <i class="fas fa-plus"></i> Create
           </button>
         </div>
 
-        <!-- Coupon list -->
-        <div id="couponList" style="min-height:50px; max-height:360px; overflow-y:auto;">
+        <div id="couponList" style="min-height:50px; max-height:400px; overflow-y:auto;">
           <div style="text-align:center; color:var(--text-muted); padding:2rem;">
-            <i class="fas fa-spinner fa-spin" style="font-size:1.5rem; margin-bottom:0.5rem;"></i>
-            <div>Loading coupons...</div>
+            <i class="fas fa-spinner fa-spin" style="font-size:1.5rem; margin-bottom:0.5rem; display:block;"></i>
+            Loading access codes...
           </div>
         </div>
+      </div>
+
+      <!-- Flagged Users -->
+      <div class="card" id="flaggedUsersSection" style="margin-bottom: 2.5rem; display:none;">
+        <div class="stat-label" style="margin-bottom: 1.5rem;">
+          <span><i class="fas fa-flag" style="margin-right: 0.5rem; color: var(--danger);"></i>Flagged Users <span id="flaggedCount" style="background:rgba(239,68,68,0.2); color:var(--danger); border-radius:20px; padding:2px 10px; font-size:0.8rem; margin-left:8px;"></span></span>
+          <button class="btn" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;" onclick="loadFlaggedUsers()">
+            <i class="fas fa-sync-alt"></i> Refresh
+          </button>
+        </div>
+        <div id="flaggedUsersList"></div>
       </div>
 
       <!-- User Table -->
@@ -1300,6 +1422,9 @@
 
         // Load coupon codes
         loadCoupons();
+
+        // Load flagged users
+        loadFlaggedUsers();
 
       } catch (error) {
         showAlert('System Sync Error: ' + error.message, 'error');
@@ -1620,36 +1745,45 @@
         if (res.status === 401) { logout(); return; }
         const data = await res.json();
         if (!data.coupons || data.coupons.length === 0) {
-          list.innerHTML = '<div style="text-align:center; color:var(--text-muted); padding:2rem;">No coupons yet.</div>';
+          list.innerHTML = '<div style="text-align:center; color:var(--text-muted); padding:2rem;"><i class="fas fa-key" style="font-size:2rem; margin-bottom:0.5rem; display:block; opacity:0.3;"></i>No access codes yet. Create one above.</div>';
           return;
         }
-        list.innerHTML = `<table style="width:100%; border-collapse:collapse; font-size:0.875rem;">
-          <thead><tr style="border-bottom:1px solid var(--border);">
-            <th style="text-align:left; padding:8px 10px; color:var(--text-muted); font-weight:600;">Code</th>
-            <th style="text-align:center; padding:8px 10px; color:var(--text-muted); font-weight:600;">Uses</th>
-            <th style="text-align:center; padding:8px 10px; color:var(--text-muted); font-weight:600;">Status</th>
-            <th style="text-align:left; padding:8px 10px; color:var(--text-muted); font-weight:600;">Expires</th>
-            <th style="text-align:center; padding:8px 10px; color:var(--text-muted); font-weight:600;">Action</th>
+        list.innerHTML = `<table class="coupon-table">
+          <thead><tr>
+            <th>Access Code</th>
+            <th>Uses</th>
+            <th>Status</th>
+            <th>Expires</th>
+            <th style="text-align:right;">Actions</th>
           </tr></thead>
           <tbody>${data.coupons.map(c => {
-            const uses = c.max_uses != null ? `${c.uses}/${c.max_uses}` : `${c.uses}/∞`;
-            const status = c.is_active ? '<span style="color:#059669; font-weight:700;">Active</span>' : '<span style="color:#ef4444; font-weight:700;">Inactive</span>';
+            const uses = c.max_uses != null ? `${c.uses} / ${c.max_uses}` : `${c.uses} / ∞`;
+            const isActive = c.is_active;
+            const statusBadge = isActive
+              ? '<span class="flag-badge" style="background:rgba(16,185,129,0.15); color:#34d399;">Active</span>'
+              : '<span class="flag-badge" style="background:rgba(239,68,68,0.12); color:#f87171;">Inactive</span>';
             const exp = c.expires_at ? new Date(c.expires_at).toLocaleDateString() : '—';
-            return `<tr style="border-bottom:1px solid var(--border);">
-              <td style="padding:10px; font-weight:700; letter-spacing:1px;">${c.code}</td>
-              <td style="padding:10px; text-align:center;">${uses}</td>
-              <td style="padding:10px; text-align:center;">${status}</td>
-              <td style="padding:10px;">${exp}</td>
-              <td style="padding:10px; text-align:center;">
-                <button class="btn btn-danger" style="padding:4px 12px; font-size:0.78rem;" onclick="deleteCoupon('${c.code}')">
-                  <i class="fas fa-trash"></i> Delete
-                </button>
+            const safeCode = c.code.replace(/'/g, "\\'");
+            return `<tr>
+              <td data-label="Code"><span class="coupon-code-badge">${c.code}</span></td>
+              <td data-label="Uses" style="color:var(--text-secondary);">${uses}</td>
+              <td data-label="Status">${statusBadge}</td>
+              <td data-label="Expires" style="color:var(--text-muted); font-size:0.85rem;">${exp}</td>
+              <td data-label="Actions" style="text-align:right;">
+                <div style="display:flex; gap:6px; justify-content:flex-end; flex-wrap:wrap;">
+                  <button class="btn" style="padding:5px 12px; font-size:0.78rem; border-color:${isActive ? 'var(--text-muted)' : 'var(--success)'}; color:${isActive ? 'var(--text-muted)' : 'var(--success)'};" onclick="toggleCoupon('${safeCode}', ${isActive})">
+                    <i class="fas fa-${isActive ? 'pause' : 'play'}"></i> ${isActive ? 'Disable' : 'Enable'}
+                  </button>
+                  <button class="btn btn-danger" style="padding:5px 12px; font-size:0.78rem;" onclick="deleteCoupon('${safeCode}')">
+                    <i class="fas fa-trash"></i>
+                  </button>
+                </div>
               </td>
             </tr>`;
           }).join('')}</tbody>
         </table>`;
       } catch (e) {
-        list.innerHTML = '<div style="color:#ef4444; padding:1rem;">Failed to load coupons.</div>';
+        list.innerHTML = '<div style="color:var(--danger); padding:1rem;">Failed to load coupons.</div>';
       }
     }
 
@@ -1658,7 +1792,7 @@
       const maxUsesRaw = document.getElementById('couponMaxUses').value.trim();
       const expiryRaw = document.getElementById('couponExpiry').value;
 
-      if (!code) { showAlert('Enter a coupon code', 'error'); return; }
+      if (!code) { showAlert('Enter an access code', 'error'); return; }
 
       const body = { code };
       if (maxUsesRaw) body.max_uses = parseInt(maxUsesRaw);
@@ -1673,21 +1807,34 @@
         if (res.status === 401) { logout(); return; }
         const data = await res.json();
         if (data.ok) {
-          showAlert(`Coupon '${code}' created!`, 'success');
+          showAlert(`Access code '${code}' created!`, 'success');
           document.getElementById('couponCodeInput').value = '';
           document.getElementById('couponMaxUses').value = '';
           document.getElementById('couponExpiry').value = '';
           loadCoupons();
         } else {
-          showAlert(data.error || 'Failed to create coupon', 'error');
+          showAlert(data.message || 'Failed to create coupon', 'error');
         }
       } catch (e) {
         showAlert(e.message, 'error');
       }
     }
 
+    async function toggleCoupon(code, currentlyActive) {
+      try {
+        const res = await fetch(`/api/admin/coupons/${encodeURIComponent(code)}/toggle`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${adminToken}` }
+        });
+        if (res.status === 401) { logout(); return; }
+        const data = await res.json();
+        if (data.ok) { showAlert(data.message, 'success'); loadCoupons(); }
+        else showAlert(data.message || 'Failed', 'error');
+      } catch (e) { showAlert(e.message, 'error'); }
+    }
+
     async function deleteCoupon(code) {
-      if (!confirm(`Delete coupon '${code}'? This cannot be undone.`)) return;
+      if (!confirm(`Delete access code '${code}'? This cannot be undone.`)) return;
       try {
         const res = await fetch(`/api/admin/coupons/${encodeURIComponent(code)}`, {
           method: 'DELETE',
@@ -1695,11 +1842,72 @@
         });
         if (res.status === 401) { logout(); return; }
         const data = await res.json();
-        if (data.ok) { showAlert(`Coupon '${code}' deleted.`, 'success'); loadCoupons(); }
-        else showAlert(data.error || 'Failed to delete', 'error');
+        if (data.ok) { showAlert(`Access code '${code}' deleted.`, 'success'); loadCoupons(); }
+        else showAlert(data.message || 'Failed to delete', 'error');
       } catch (e) {
         showAlert(e.message, 'error');
       }
+    }
+
+    // --- Flagged Users ---
+    async function loadFlaggedUsers() {
+      if (!adminToken) return;
+      try {
+        const res = await fetch('/api/admin/flagged-users', { headers: { 'Authorization': `Bearer ${adminToken}` } });
+        if (res.status === 401) { logout(); return; }
+        const data = await res.json();
+        const section = document.getElementById('flaggedUsersSection');
+        const list = document.getElementById('flaggedUsersList');
+        const countEl = document.getElementById('flaggedCount');
+
+        if (!data.flagged_users || data.flagged_users.length === 0) {
+          section.style.display = 'none';
+          return;
+        }
+
+        section.style.display = 'block';
+        countEl.textContent = data.total_flagged;
+
+        list.innerHTML = data.flagged_users.map(u => {
+          const riskClass = `flag-${u.highest_risk_level}`;
+          const safeEmail = u.email.replace(/'/g, "\\'");
+          return `<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; padding:1rem; background:var(--bg-body); border-radius:0.625rem; margin-bottom:0.75rem; border:1px solid var(--border-color);">
+            <div style="flex:1; min-width:200px; word-break:break-all;">
+              <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
+                <span class="flag-badge ${riskClass}">${u.highest_risk_level} risk</span>
+                <span style="font-weight:600; color:var(--text-main);">${u.email}</span>
+              </div>
+              <div style="font-size:0.78rem; color:var(--text-muted);">
+                ${u.risk_flag_count} flag(s) · Last: ${u.time_since_flag_hours != null ? u.time_since_flag_hours + 'h ago' : 'Unknown'}
+              </div>
+            </div>
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+              <button class="btn" style="padding:5px 14px; font-size:0.8rem; border-color:var(--success); color:var(--success);" onclick="clearFlag('${safeEmail}')">
+                <i class="fas fa-check"></i> Clear Flag
+              </button>
+              <button class="btn" style="padding:5px 14px; font-size:0.8rem;" onclick="showUserDetails('${safeEmail}')">
+                <i class="fas fa-user"></i> View
+              </button>
+            </div>
+          </div>`;
+        }).join('');
+      } catch (e) {
+        console.error('Error loading flagged users:', e);
+      }
+    }
+
+    async function clearFlag(email) {
+      if (!confirm(`Clear risk flag for ${email}?`)) return;
+      try {
+        const res = await fetch(`/api/admin/users/${encodeURIComponent(email)}/clear-flag`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${adminToken}` }
+        });
+        if (res.status === 401) { logout(); return; }
+        const data = await res.json();
+        if (data.ok) { showAlert('Flag cleared.', 'success'); loadFlaggedUsers(); }
+        else showAlert(data.message || 'Failed', 'error');
+      } catch (e) { showAlert(e.message, 'error'); }
     }
 
     async function deleteUser(email) {
@@ -1721,36 +1929,59 @@
       const body = document.getElementById('modalBody');
       modal.classList.add('active');
 
+      const safeEmail = user.email.replace(/'/g, "\\'");
+      const refillDate = user.last_community_refill ? new Date(user.last_community_refill).toLocaleDateString() : 'Never';
+      const nextRefill = user.last_community_refill ? (() => { const d = new Date(user.last_community_refill); d.setMonth(d.getMonth() + 1); d.setDate(1); return d.toLocaleDateString(); })() : '—';
+
       body.innerHTML = `
-        <div style="background:var(--bg-body); padding:1rem; border-radius:0.5rem; margin-bottom:1rem; word-wrap:break-word; overflow-wrap:break-word;">
-           <div style="color:var(--text-muted); font-size:0.8rem; text-transform:uppercase; margin-bottom:0.5rem;">Identity</div>
-           <div style="font-size:1.1rem; font-weight:600; word-break:break-all; overflow-wrap:break-word;">${user.email}</div>
+        <div style="background:var(--bg-body); padding:1rem; border-radius:0.5rem; margin-bottom:1rem; word-wrap:break-word;">
+           <div style="color:var(--text-muted); font-size:0.75rem; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px;">User</div>
+           <div style="font-size:1rem; font-weight:600; word-break:break-all; color:var(--text-main);">${user.email}</div>
+           ${user.is_flagged ? `<div style="margin-top:6px;"><span class="flag-badge flag-${user.highest_risk_level || 'low'}"><i class="fas fa-flag"></i> Flagged — ${user.highest_risk_level || 'low'} risk</span></div>` : ''}
         </div>
-        
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1.5rem;">
-           <div style="background:var(--bg-body); padding:1rem; border-radius:0.5rem;">
-              <div style="color:var(--text-muted); font-size:0.8rem; margin-bottom:0.5rem;">Balance</div>
+
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem; margin-bottom:1rem;">
+           <div style="background:var(--bg-body); padding:0.875rem; border-radius:0.5rem;">
+              <div style="color:var(--text-muted); font-size:0.75rem; margin-bottom:4px;">Balance</div>
               <div style="color:var(--success); font-weight:700; font-size:1.1rem;">${formatTalktime(user.talktime)}</div>
            </div>
-           <div style="background:var(--bg-body); padding:1rem; border-radius:0.5rem;">
-              <div style="color:var(--text-muted); font-size:0.8rem; margin-bottom:0.5rem;">Sessions</div>
+           <div style="background:var(--bg-body); padding:0.875rem; border-radius:0.5rem;">
+              <div style="color:var(--text-muted); font-size:0.75rem; margin-bottom:4px;">Sessions</div>
               <div style="color:var(--brand-primary); font-weight:700; font-size:1.1rem;">${user.total_sessions}</div>
            </div>
+           ${user.is_community_member ? `
+           <div style="background:var(--bg-body); padding:0.875rem; border-radius:0.5rem;">
+              <div style="color:var(--text-muted); font-size:0.75rem; margin-bottom:4px;">Last Refill</div>
+              <div style="color:var(--warning); font-weight:600; font-size:0.9rem;">${refillDate}</div>
+           </div>
+           <div style="background:var(--bg-body); padding:0.875rem; border-radius:0.5rem;">
+              <div style="color:var(--text-muted); font-size:0.75rem; margin-bottom:4px;">Next Refill</div>
+              <div style="color:var(--info); font-weight:600; font-size:0.9rem;">${nextRefill}</div>
+           </div>` : ''}
         </div>
-        
+
         <div style="display:flex; flex-direction:column; gap:0.5rem;">
-           <button class="btn btn-primary" style="justify-content:center; width:100%;" onclick="openTalktimeModal('${user.email}')">Add Talktime</button>
-           
+           <button class="btn btn-primary" style="justify-content:center; width:100%;" onclick="openTalktimeModal('${safeEmail}')">
+             <i class="fas fa-clock"></i> Edit Talktime
+           </button>
+
            <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
-             <button class="btn" style="flex:1; min-width:120px; justify-content:center; border-color:var(--warning); color:var(--warning);" onclick="resetTalkTime('${user.email}')">
-               <i class="fas fa-undo"></i> <span>Reset Time</span>
+             <button class="btn" style="flex:1; min-width:120px; justify-content:center; border-color:var(--warning); color:var(--warning);" onclick="resetTalkTime('${safeEmail}')">
+               <i class="fas fa-undo"></i> Reset to 0
              </button>
-             <button class="btn" style="flex:1; min-width:120px; justify-content:center; border-color:${user.is_community_member ? 'var(--text-muted)' : 'var(--brand-primary)'}; color:${user.is_community_member ? 'var(--text-muted)' : 'var(--brand-primary)'};" onclick="toggleVIP('${user.email}')">
-               <i class="${user.is_community_member ? 'fas fa-user-minus' : 'fas fa-crown'}"></i> <span>${user.is_community_member ? 'Remove Community Member' : 'Make Community Member'}</span>
+             <button class="btn" style="flex:1; min-width:120px; justify-content:center; border-color:${user.is_community_member ? 'var(--text-muted)' : 'var(--brand-primary)'}; color:${user.is_community_member ? 'var(--text-muted)' : 'var(--brand-primary)'};" onclick="toggleVIP('${safeEmail}')">
+               <i class="${user.is_community_member ? 'fas fa-user-minus' : 'fas fa-crown'}"></i> ${user.is_community_member ? 'Remove Community' : 'Make Community'}
              </button>
            </div>
 
-           <button class="btn" style="justify-content:center; width:100%; color:var(--danger); border-color:rgba(239,68,68,0.3); margin-top:0.5rem;" onclick="deleteUser('${user.email}')">Delete User</button>
+           ${user.is_flagged ? `
+           <button class="btn" style="justify-content:center; width:100%; border-color:var(--success); color:var(--success);" onclick="clearFlag('${safeEmail}'); closeModal();">
+             <i class="fas fa-check"></i> Clear Risk Flag
+           </button>` : ''}
+
+           <button class="btn" style="justify-content:center; width:100%; color:var(--danger); border-color:rgba(239,68,68,0.3); margin-top:0.25rem;" onclick="deleteUser('${safeEmail}')">
+             <i class="fas fa-trash"></i> Delete User
+           </button>
         </div>
       `;
     }
@@ -1758,25 +1989,29 @@
     function openTalktimeModal(email) {
       const body = document.getElementById('modalBody');
       body.innerHTML = `
-          <h4 style="margin-bottom:1rem; word-wrap:break-word; overflow-wrap:break-word;">Add Credits to <span style="word-break:break-all;">${email}</span></h4>
-          <input type="number" id="talktimeAmount" class="btn" style="width:100%; cursor:text; margin-bottom:1rem; background:var(--bg-body); padding:1rem; border:1px solid var(--border-color); border-radius:0.625rem;" placeholder="Seconds (e.g. 600)">
-          <div style="display:flex; gap:1rem; flex-wrap:wrap;">
-             <button class="btn btn-primary" style="flex:1; min-width:120px; justify-content:center;" onclick="updateTalktime('${email}')">Confirm</button>
-             <button class="btn" style="flex:1; min-width:120px; justify-content:center;" onclick="showUserDetails('${email}')">Back</button>
+          <h4 style="margin-bottom:1rem; word-wrap:break-word; overflow-wrap:break-word;">Edit Talktime — <span style="word-break:break-all; color:var(--brand-light);">${email}</span></h4>
+          <input type="number" id="talktimeAmount" style="width:100%; cursor:text; margin-bottom:0.75rem; background:var(--bg-body); padding:1rem; border:1px solid var(--border-color); border-radius:0.625rem; color:var(--text-main); font-family:inherit; font-size:1rem; box-sizing:border-box;" placeholder="Seconds (e.g. 900 = 15 min)">
+          <div style="display:flex; gap:0.75rem; flex-wrap:wrap; margin-bottom:1rem;">
+             <button class="btn btn-primary" style="flex:1; min-width:100px; justify-content:center;" onclick="updateTalktime('${email}','add')"><i class="fas fa-plus"></i> Add</button>
+             <button class="btn btn-success" style="flex:1; min-width:100px; justify-content:center;" onclick="updateTalktime('${email}','set')"><i class="fas fa-equals"></i> Set</button>
+             <button class="btn" style="flex:1; min-width:100px; justify-content:center; border-color:var(--warning); color:var(--warning);" onclick="updateTalktime('${email}','subtract')"><i class="fas fa-minus"></i> Subtract</button>
           </div>
+          <button class="btn" style="width:100%; justify-content:center;" onclick="showUserDetails('${email}')"><i class="fas fa-arrow-left"></i> Back</button>
        `;
     }
 
-    async function updateTalktime(email) {
+    async function updateTalktime(email, action) {
       const amount = parseInt(document.getElementById('talktimeAmount').value);
-      if (!amount) return;
+      if (!amount || amount <= 0) { showAlert('Enter a valid amount (seconds)', 'error'); return; }
       try {
         const res = await fetch(`/api/admin/users/${encodeURIComponent(email)}/talktime`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminToken}` },
-          body: JSON.stringify({ action: 'add', amount })
+          body: JSON.stringify({ action, amount })
         });
-        if ((await res.json()).ok) { showAlert('Balance updated.', 'success'); closeModal(); loadData(); }
+        const data = await res.json();
+        if (data.ok) { showAlert(`Done! New balance: ${formatTalktime(data.new_talktime)}`, 'success'); closeModal(); loadData(); }
+        else showAlert(data.message || 'Failed', 'error');
       } catch (e) { showAlert(e.message, 'error'); }
     }
 
