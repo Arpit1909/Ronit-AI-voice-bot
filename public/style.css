@@ -1757,3 +1757,114 @@ img {
   max-width: 100%;
   height: auto;
 }
+
+/* ===== Screen Base Styles (replaces inline HTML styles) ===== */
+.screen {
+  position: relative;
+  padding: 40px 20px;
+  align-items: center;
+}
+
+#screen-loading {
+  flex-direction: column;
+}
+
+/* ===== Desktop Layout: Shift content right when side panel is open ===== */
+@media (min-width: 1025px) {
+  #sidePanel:not(.closed) ~ .screen {
+    margin-left: 300px;
+    max-width: none;
+    width: calc(100% - 300px);
+    transition: margin-left 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+                width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  #sidePanel:not(.closed) ~ #screen-call {
+    margin-left: 300px;
+    width: calc(100% - 300px);
+    transition: margin-left 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+                width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+}
+
+/* ===== Screen Padding Responsive Overrides ===== */
+@media (max-width: 768px) {
+  .screen {
+    padding: 24px 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .screen {
+    padding: 16px 12px;
+  }
+}
+
+/* ===== Loading Content Card (replaces inline styles) ===== */
+.loading-content-card {
+  background: var(--card-white);
+  border-radius: 24px;
+  padding: 48px 40px;
+  max-width: 480px;
+  width: 100%;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.12);
+  border: 1px solid var(--border-light);
+  text-align: center;
+}
+
+[data-theme="dark"] .loading-content-card {
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+}
+
+.loading-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-heading);
+  margin: 0 0 12px;
+}
+
+.loading-subtitle {
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  margin: 0 0 32px;
+}
+
+.loading-bar-container {
+  width: 100%;
+  background: var(--surface-subtle);
+  border-radius: 12px;
+  height: 8px;
+  overflow: hidden;
+}
+
+.loading-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #047857 0%, #d97706 50%, #047857 100%);
+  border-radius: 12px;
+  transition: width 0.3s ease;
+  width: 0%;
+}
+
+@media (max-width: 640px) {
+  .loading-content-card {
+    padding: 32px 24px;
+    border-radius: 20px;
+  }
+  .loading-title {
+    font-size: 1.25rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .loading-content-card {
+    padding: 24px 16px;
+    border-radius: 16px;
+  }
+  .loading-title {
+    font-size: 1.125rem;
+  }
+  .loading-subtitle {
+    font-size: 0.875rem;
+    margin-bottom: 24px;
+  }
+}

@@ -1402,15 +1402,12 @@ def user_ping(current_user_email: str):
 @limiter.limit("5 per minute")
 @token_required
 def conversation_token(current_user_email: str):
-    """Get conversation token from ElevenLabs (Community Members ONLY)."""
+    """Get conversation token from ElevenLabs (Community Members only)."""
     global _TOKEN_CACHE
-    
-    # --- CHECKS THE ID (Community Members Only) ---
+
     user = get_user(current_user_email)
     if not user or not user.get("is_community_member"):
-        logger.warning(f"⛔ Token Denied: {current_user_email} is not a Community Member")
-        raise AppError("Access Restricted: Community Members Only", status_code=403)
-    # -----------------------------------
+        raise AppError("Access restricted to Community Members only", status_code=403)
 
     # Validate configuration
     if not Config.AGENT_ID or not Config.AGENT_ID.strip():

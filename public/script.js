@@ -279,6 +279,12 @@ document.addEventListener('DOMContentLoaded', () => {
   // Pre-warm config and ElevenLabs token in the background so call starts instantly
   setTimeout(() => prefetchCallAssets(), 2000);
 
+  // Wire coupon redeem (module scope — inline onclick doesn't work with type="module")
+  const redeemBtn = document.getElementById('redeemCouponBtn');
+  const couponInputEl = document.getElementById('couponInput');
+  if (redeemBtn) redeemBtn.addEventListener('click', redeemCoupon);
+  if (couponInputEl) couponInputEl.addEventListener('keydown', e => { if (e.key === 'Enter') redeemCoupon(); });
+
   // Start periodic online status ping (every 60 seconds) to keep user marked as online
   startOnlinePing();
 
